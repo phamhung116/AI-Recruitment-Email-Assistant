@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5dc;
+    --gray-400: #99a1af;
+    --gray-500: #6a7282;
+    --gray-600: #4a5565;
+    --gray-800: #1e2939;
+    --gray-900: #101828;
+
+    --primary-50: #fff1f2;
+    --primary-100: #ffe3e5;
+    --primary-200: #ffc9cd;
+    --primary-300: #ff9ca3;
+    --primary-400: #ff5f69;
+    --primary-500: #fb2c36;
+    --primary-600: #e31825;
+    --primary-700: #c0101b;
+    --primary-800: #9f121b;
+    --primary-900: #841820;
+
+    --accent-50: #fffbe8;
+    --accent-100: #fff4bf;
+    --accent-200: #ffe875;
+    --accent-300: #ffdc3f;
+    --accent-400: #fac800;
+    --accent-500: #d9a900;
+
+    --background: 220 33% 98%;
+    --foreground: 220 43% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 43% 11%;
+    --primary: 357 96% 58%;
+    --primary-foreground: 0 0% 100%;
+    --accent: 48 100% 49%;
+    --accent-foreground: 220 43% 11%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 10% 46%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 357 96% 58%;
+}
+
+.dark {
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5dc;
+    --gray-400: #99a1af;
+    --gray-500: #6a7282;
+    --gray-600: #4a5565;
+    --gray-800: #1e2939;
+    --gray-900: #101828;
+
+    --primary-50: #fff1f2;
+    --primary-100: #ffe3e5;
+    --primary-200: #ffc9cd;
+    --primary-300: #ff9ca3;
+    --primary-400: #ff5f69;
+    --primary-500: #fb2c36;
+    --primary-600: #e31825;
+    --primary-700: #c0101b;
+    --primary-800: #9f121b;
+    --primary-900: #841820;
+
+    --accent-50: #fffbe8;
+    --accent-100: #fff4bf;
+    --accent-200: #ffe875;
+    --accent-300: #ffdc3f;
+    --accent-400: #fac800;
+    --accent-500: #d9a900;
+
+    --background: 220 43% 11%;
+    --foreground: 220 20% 96%;
+    --card: 220 40% 14%;
+    --card-foreground: 220 20% 96%;
+    --primary: 357 96% 64%;
+    --primary-foreground: 0 0% 100%;
+    --accent: 48 96% 49%;
+    --accent-foreground: 220 43% 11%;
+    --muted: 220 32% 18%;
+    --muted-foreground: 220 12% 70%;
+    --destructive: 0 63% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 26% 24%;
+    --input: 220 26% 24%;
+    --ring: 357 96% 64%;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    background: hsl(var(--background));
+}
+
+body {
+    margin: 0;
+    color: hsl(var(--foreground));
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    letter-spacing: 0;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+}

@@ -1,0 +1,16 @@
+export const STATUS_STYLE_MAP: Record<string, string> = {
+    PENDING: "border-amber-200 bg-amber-50 text-amber-900",
+    DRAFT: "border-slate-200 bg-slate-50 text-slate-700",
+    PENDING_APPROVAL: "border-amber-200 bg-amber-50 text-amber-900",
+    APPROVED: "border-blue-200 bg-blue-50 text-blue-900",
+    SENT: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    FAILED: "border-red-200 bg-red-50 text-red-900",
+    CANCELLED: "border-slate-200 bg-slate-100 text-slate-600",
+    PASS_CV: "border-blue-200 bg-blue-50 text-blue-900",
+    REJECT_CV: "border-red-200 bg-red-50 text-red-900",
+    INTERVIEW_CONFIRMED: "border-blue-200 bg-blue-50 text-blue-900",
+    PASS_INTERVIEW: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    REJECT_INTERVIEW: "border-red-200 bg-red-50 text-red-900",
+    OFFER_ACCEPTED: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    SENSITIVE: "border-rose-200 bg-rose-50 text-rose-900",
+};

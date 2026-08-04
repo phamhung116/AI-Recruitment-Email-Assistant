@@ -1,0 +1,5 @@
+AI_GENERATE_EMAIL = "ai_generate_email"
+APPROVE_EMAIL = "approve_email"
+SEND_EMAIL = "send_email"
+CANCEL_EMAIL = "cancel_email"
+UPDATE_CANDIDATE_STATUS = "update_candidate_status"
