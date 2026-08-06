@@ -42,12 +42,12 @@ export function EmailHistoryPage() {
         },
         {
             key: "sentBy",
-            header: "Sent By",
+            header: "Recorded By",
             render: (item) => item.sent_by || "System",
         },
         {
             key: "sentAt",
-            header: "Sent At",
+            header: "Simulated At",
             render: (item) => formatDateTime(item.sent_at),
         },
     ];
@@ -70,7 +70,7 @@ export function EmailHistoryPage() {
                 <DataTable
                     columns={columns}
                     data={filteredItems}
-                    emptyState={<EmptyState description="Sent emails will appear here after queue simulation succeeds." icon={History} title="No sent emails yet" />}
+                    emptyState={<EmptyState description="Simulation records will appear here after a queue simulation succeeds." icon={History} title="No simulated sends yet" />}
                 />
             )}
         </div>

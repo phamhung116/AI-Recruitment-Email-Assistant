@@ -231,7 +231,7 @@ export function EmailTemplatesPage() {
                                     <div className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
                                         <div>
                                             <Label>Sensitive Template</Label>
-                                            <p className="text-xs text-slate-500">Requires HR approval before queue send.</p>
+                                            <p className="text-xs text-slate-500">Requires HR approval before send simulation.</p>
                                         </div>
                                         <Switch checked={field.value} onCheckedChange={field.onChange} />
                                     </div>

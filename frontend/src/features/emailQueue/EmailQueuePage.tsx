@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Inbox, Send } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Eye, FlaskConical, Inbox, Save, ShieldCheck, XCircle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { DataTable, type DataTableColumn } from "@/components/shared/DataTable";
+import { EmailReviewPanel, ReviewStatusBadge } from "@/components/shared/EmailReviewPanel";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { LoadingSkeleton } from "@/components/shared/LoadingSkeleton";
@@ -20,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EMAIL_TYPES } from "@/constants/emailTypes";
 import { QUERY_KEYS } from "@/constants/queryKeys";
 import { formatDateTime } from "@/lib/date";
+import { isCurrentReviewCompleted, isReviewInProgress } from "@/lib/reviewState";
 import { recruitmentApi } from "@/services/recruitmentApi";
 import { useUiStore } from "@/stores/uiStore";
 import type { EmailQueueItem } from "@/types/recruitment";
@@ -27,7 +29,28 @@ import type { EmailQueueItem } from "@/types/recruitment";
 const QUEUE_STATUSES = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "SENT", "FAILED", "CANCELLED"];
 const ALL_VALUE = "ALL";
 
-type QueueAction = "approve" | "send" | "cancel";
+type QueueAction = "approve" | "simulate" | "cancel";
+
+const ACTION_COPY: Record<QueueAction, { confirmLabel: string; description: string; success: string; title: string }> = {
+    approve: {
+        confirmLabel: "Approve draft",
+        description: "Confirm that an HR reviewer has checked the final wording and safety findings.",
+        success: "Draft approved",
+        title: "Approve this email draft?",
+    },
+    simulate: {
+        confirmLabel: "Run simulation",
+        description: "This records a simulated send in history. No real email will be delivered.",
+        success: "Send simulation recorded",
+        title: "Simulate sending this email?",
+    },
+    cancel: {
+        confirmLabel: "Cancel draft",
+        description: "This closes the queue item. The action cannot be undone from this demo UI.",
+        success: "Draft cancelled",
+        title: "Cancel this email draft?",
+    },
+};
 
 export function EmailQueuePage() {
     const queryClient = useQueryClient();
@@ -36,18 +59,49 @@ export function EmailQueuePage() {
     const [statusFilter, setStatusFilter] = useState(ALL_VALUE);
     const [emailTypeFilter, setEmailTypeFilter] = useState(ALL_VALUE);
     const [selectedItem, setSelectedItem] = useState<EmailQueueItem | null>(null);
+    const [isDraftDirty, setIsDraftDirty] = useState(false);
     const [pendingAction, setPendingAction] = useState<QueueAction | null>(null);
     const queueQuery = useQuery({
         queryKey: QUERY_KEYS.EMAIL_QUEUE,
         queryFn: recruitmentApi.getEmailQueue,
     });
+    const selectedDraftVersion = selectedItem?.risk_check_result.draft_version ?? 0;
+    const selectedItemQuery = useQuery({
+        queryKey: [...QUERY_KEYS.EMAIL_QUEUE, "detail", selectedItem?.id, selectedDraftVersion],
+        queryFn: () => recruitmentApi.getEmailQueueItem(selectedItem!.id),
+        enabled: Boolean(
+            selectedItem
+            && !isDraftDirty
+            && isReviewInProgress(selectedItem.risk_check_result),
+        ),
+        refetchInterval: (query) => {
+            const latestItem = query.state.data;
+            const riskResult = latestItem?.risk_check_result ?? selectedItem?.risk_check_result;
+            return riskResult && isReviewInProgress(riskResult) ? 1_000 : false;
+        },
+    });
+
+    useEffect(() => {
+        const refreshedItem = selectedItemQuery.data;
+        if (!refreshedItem || isDraftDirty) return;
+
+        setSelectedItem((currentItem) => (
+            currentItem?.id === refreshedItem.id ? refreshedItem : currentItem
+        ));
+        queryClient.setQueryData<EmailQueueItem[]>(QUERY_KEYS.EMAIL_QUEUE, (items) => (
+            items?.map((item) => item.id === refreshedItem.id ? refreshedItem : item)
+        ));
+    }, [isDraftDirty, queryClient, selectedItemQuery.data]);
+
     const updateMutation = useMutation({
         mutationFn: (item: EmailQueueItem) => recruitmentApi.updateEmailQueue(item.id, {
             subject: item.subject,
             body: item.body,
         }),
-        onSuccess: async () => {
-            showToast("Email draft updated", "success");
+        onSuccess: async (item) => {
+            setSelectedItem(item);
+            setIsDraftDirty(false);
+            showToast("Draft saved – review queued", "success");
             await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EMAIL_QUEUE });
         },
         onError: (error) => showToast(error.message, "error"),
@@ -58,14 +112,14 @@ export function EmailQueuePage() {
                 return recruitmentApi.approveEmailQueueItem(itemId);
             }
 
-            if (action === "send") {
+            if (action === "simulate") {
                 return recruitmentApi.sendEmailQueueItem(itemId);
             }
 
             return recruitmentApi.cancelEmailQueueItem(itemId);
         },
         onSuccess: async (_, variables) => {
-            showToast(`Email ${variables.action} action completed`, "success");
+            showToast(ACTION_COPY[variables.action].success, "success");
             setPendingAction(null);
             setSelectedItem(null);
             await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EMAIL_QUEUE });
@@ -74,6 +128,10 @@ export function EmailQueuePage() {
         },
         onError: (error) => showToast(error.message, "error"),
     });
+    function openItem(item: EmailQueueItem) {
+        setSelectedItem(item);
+        setIsDraftDirty(false);
+    }
     const filteredItems = useMemo(() => {
         return (queueQuery.data || []).filter((item) => {
             const matchesSearch = !search || `${item.candidate?.full_name || ""} ${item.to_email}`.toLowerCase().includes(search.toLowerCase());
@@ -102,8 +160,8 @@ export function EmailQueuePage() {
         },
         {
             key: "approval",
-            header: "Requires Approval",
-            render: (item) => item.requires_hr_approval ? <StatusBadge sensitive value="SENSITIVE" /> : "No",
+            header: "Safety review",
+            render: (item) => <ReviewStatusBadge riskResult={item.risk_check_result} />,
         },
         {
             key: "createdAt",
@@ -114,12 +172,10 @@ export function EmailQueuePage() {
             key: "actions",
             header: "Actions",
             render: (item) => (
-                <div className="flex flex-wrap gap-2">
-                    <Button onClick={() => setSelectedItem(item)} size="sm" variant="secondary">Preview</Button>
-                    <Button onClick={() => { setSelectedItem(item); setPendingAction("approve"); }} size="sm" variant="outline">Approve</Button>
-                    <Button onClick={() => { setSelectedItem(item); setPendingAction("send"); }} size="sm" variant="outline">Send</Button>
-                    <Button onClick={() => { setSelectedItem(item); setPendingAction("cancel"); }} size="sm" variant="outline">Cancel</Button>
-                </div>
+                <Button onClick={() => openItem(item)} size="sm" variant="secondary">
+                    <Eye className="h-3.5 w-3.5" />
+                    Open review
+                </Button>
             ),
         },
     ];
@@ -137,7 +193,6 @@ export function EmailQueuePage() {
             >
                 <FilterSelect onChange={setStatusFilter} options={QUEUE_STATUSES} placeholder="Status" value={statusFilter} />
                 <FilterSelect onChange={setEmailTypeFilter} options={EMAIL_TYPES} placeholder="Email Type" value={emailTypeFilter} />
-                <Input className="min-w-44" placeholder="Date range" />
             </SearchFilterBar>
             {queueQuery.error && <ErrorState message={queueQuery.error.message} />}
             {queueQuery.isLoading ? (
@@ -151,32 +206,50 @@ export function EmailQueuePage() {
             )}
             <EmailPreviewDrawer
                 item={selectedItem}
+                isDirty={isDraftDirty}
+                isSaving={updateMutation.isPending}
                 onAction={(action) => setPendingAction(action)}
-                onChange={setSelectedItem}
-                onClose={() => setSelectedItem(null)}
+                onChange={(item) => {
+                    setSelectedItem(item);
+                    setIsDraftDirty(true);
+                }}
+                onClose={() => {
+                    setSelectedItem(null);
+                    setIsDraftDirty(false);
+                }}
                 onSave={() => selectedItem && updateMutation.mutate(selectedItem)}
             />
             <ConfirmDialog
-                confirmLabel={pendingAction ? pendingAction.charAt(0).toUpperCase() + pendingAction.slice(1) : "Confirm"}
-                description="Please confirm this queue operation. The backend will enforce approval, duplicate, and status rules."
+                confirmLabel={pendingAction ? ACTION_COPY[pendingAction].confirmLabel : "Confirm"}
+                description={pendingAction ? ACTION_COPY[pendingAction].description : "Confirm this queue operation."}
                 isDestructive={pendingAction === "cancel"}
                 isOpen={Boolean(pendingAction && selectedItem)}
                 onConfirm={() => selectedItem && pendingAction && actionMutation.mutate({ action: pendingAction, itemId: selectedItem.id })}
                 onOpenChange={(isOpen) => !isOpen && setPendingAction(null)}
-                title={`${pendingAction || "Confirm"} email?`}
+                title={pendingAction ? ACTION_COPY[pendingAction].title : "Confirm operation?"}
             />
         </div>
     );
 }
 
-function EmailPreviewDrawer({ item, onAction, onChange, onClose, onSave }: { item: EmailQueueItem | null; onAction: (action: QueueAction) => void; onChange: (item: EmailQueueItem) => void; onClose: () => void; onSave: () => void }) {
+function EmailPreviewDrawer({ item, isDirty, isSaving, onAction, onChange, onClose, onSave }: { item: EmailQueueItem | null; isDirty: boolean; isSaving: boolean; onAction: (action: QueueAction) => void; onChange: (item: EmailQueueItem) => void; onClose: () => void; onSave: () => void }) {
+    const isEditable = Boolean(item && ["DRAFT", "PENDING_APPROVAL", "APPROVED"].includes(item.status));
+    const canApprove = Boolean(item && ["DRAFT", "PENDING_APPROVAL"].includes(item.status));
+    const canSimulate = Boolean(item && (item.status === "APPROVED" || (item.status === "DRAFT" && !item.requires_hr_approval)));
+    const canCancel = Boolean(item && ["DRAFT", "PENDING_APPROVAL", "APPROVED", "FAILED"].includes(item.status));
+    const isReviewReady = Boolean(item && isCurrentReviewCompleted(item.risk_check_result));
+
     return (
-        <SideDrawer isOpen={Boolean(item)} onClose={onClose} title="Email Preview">
+        <SideDrawer isOpen={Boolean(item)} onClose={onClose} title="Review email draft">
             {item && (
                 <div className="space-y-5">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Candidate Information</CardTitle>
+                    <Card className="shadow-none">
+                        <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+                            <div>
+                                <CardTitle>Candidate context</CardTitle>
+                                <p className="mt-1 text-xs text-muted-foreground">Verify the recipient and workflow state before taking action.</p>
+                            </div>
+                            <StatusBadge value={item.status} />
                         </CardHeader>
                         <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
                             <Info label="Name" value={item.candidate?.full_name || "-"} />
@@ -186,34 +259,43 @@ function EmailPreviewDrawer({ item, onAction, onChange, onClose, onSave }: { ite
                         </CardContent>
                     </Card>
                     <div className="space-y-2">
-                        <Label>Subject</Label>
-                        <Input value={item.subject} onChange={(event) => onChange({ ...item, subject: event.target.value })} />
+                        <Label htmlFor="email-subject">Subject</Label>
+                        <Input disabled={!isEditable} id="email-subject" value={item.subject} onChange={(event) => onChange({ ...item, subject: event.target.value })} />
                     </div>
                     <div className="space-y-2">
-                        <Label>Body</Label>
-                        <Textarea className="min-h-72" value={item.body} onChange={(event) => onChange({ ...item, body: event.target.value })} />
+                        <Label htmlFor="email-body">Body</Label>
+                        <Textarea className="min-h-64 leading-6" disabled={!isEditable} id="email-body" value={item.body} onChange={(event) => onChange({ ...item, body: event.target.value })} />
+                        {isDirty && <p className="text-xs font-medium text-amber-700">Unsaved changes. Save the draft before approval or another Gemini review.</p>}
                     </div>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Risk Check Result</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <pre className="overflow-auto rounded-md bg-slate-950 p-4 text-xs text-slate-100">
-                                {JSON.stringify(item.risk_check_result, null, 2)}
-                            </pre>
-                            <div className="mt-4">
-                                {item.requires_hr_approval ? <StatusBadge sensitive value="SENSITIVE" /> : <StatusBadge value="APPROVED" />}
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <div className="flex flex-wrap gap-2">
-                        <Button onClick={onSave}>Save</Button>
-                        <Button onClick={() => onAction("approve")} variant="secondary">Approve</Button>
-                        <Button onClick={() => onAction("send")} variant="secondary">
-                            <Send className="h-4 w-4" />
-                            Send
-                        </Button>
-                        <Button onClick={() => onAction("cancel")} variant="destructive">Cancel</Button>
+                    <EmailReviewPanel
+                        currentBody={item.body}
+                        currentSubject={item.subject}
+                        isStale={isDirty}
+                        onApplySuggestion={isEditable ? (subject, body) => onChange({ ...item, subject, body }) : undefined}
+                        queueId={item.id}
+                        riskResult={item.risk_check_result}
+                    />
+                    <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center gap-2 border-t border-border bg-card/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:px-6">
+                        {isEditable && (
+                            <Button disabled={!isDirty || isSaving} onClick={onSave}>
+                                <Save className="h-4 w-4" />
+                                {isSaving ? "Saving..." : "Save draft"}
+                            </Button>
+                        )}
+                        {canApprove && <Button disabled={isDirty || !isReviewReady || isSaving} onClick={() => onAction("approve")} variant="secondary"><ShieldCheck className="h-4 w-4" />Approve</Button>}
+                        {canSimulate && (
+                            <Button disabled={isDirty || !isReviewReady || isSaving} onClick={() => onAction("simulate")} variant="outline">
+                                <FlaskConical className="h-4 w-4" />
+                                Simulate send
+                            </Button>
+                        )}
+                        {canCancel && <Button onClick={() => onAction("cancel")} variant="destructive"><XCircle className="h-4 w-4" />Cancel</Button>}
+                        {(canApprove || canSimulate) && !isReviewReady && !isDirty && (
+                            <p className="basis-full text-xs font-medium text-amber-700" role="status">
+                                Approve and Simulate send unlock after the current draft version completes review.
+                            </p>
+                        )}
+                        {!isEditable && !canCancel && <p className="text-sm text-muted-foreground">This queue item is closed and available for review only.</p>}
                     </div>
                 </div>
             )}
@@ -224,8 +306,8 @@ function EmailPreviewDrawer({ item, onAction, onChange, onClose, onSave }: { ite
 function Info({ label, value }: { label: string; value: string }) {
     return (
         <div>
-            <p className="text-xs font-medium uppercase text-slate-500">{label}</p>
-            <p className="mt-1 text-slate-900">{value}</p>
+            <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
+            <p className="mt-1 text-card-foreground">{value}</p>
         </div>
     );
 }
