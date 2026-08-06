@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.agentRoutes import router as agent_router
 from app.api.auditLogRoutes import router as audit_log_router
 from app.api.candidateRoutes import router as candidate_router
 from app.api.dashboardRoutes import router as dashboard_router
@@ -29,6 +30,7 @@ def create_app() -> FastAPI:
     app.include_router(email_queue_router)
     app.include_router(email_history_router)
     app.include_router(audit_log_router)
+    app.include_router(agent_router)
     return app
 
 
