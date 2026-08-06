@@ -4,6 +4,22 @@ from app.db.database import Base, SessionLocal, engine
 from app.models import Candidate, EmailQueue, EmailTemplate, EmailType, QueueStatus
 
 
+def completed_seed_review() -> dict:
+    return {
+        "passed": True,
+        "errors": [],
+        "source": "seed",
+        "draft_version": 1,
+        "content_hash": "seed-reviewed-v1",
+        "async_review": {
+            "status": "COMPLETED",
+            "draft_version": 1,
+            "review_version": 1,
+            "content_hash": "seed-reviewed-v1",
+        },
+    }
+
+
 def seed() -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
@@ -76,7 +92,7 @@ def seed() -> None:
                         body="Hi Nguyen Minh An,\n\nWe would like to invite you to an interview for Frontend Developer.\n\nHiLab HR",
                         status=QueueStatus.DRAFT.value,
                         requires_hr_approval=False,
-                        risk_check_result={"passed": True, "errors": [], "source": "seed"},
+                        risk_check_result=completed_seed_review(),
                         created_by="seed_hr",
                     )
                 )
@@ -90,7 +106,7 @@ def seed() -> None:
                         body="Hi Tran Bao Chau,\n\nThank you for your interest. We will not move forward at this time.\n\nHiLab HR",
                         status=QueueStatus.PENDING_APPROVAL.value,
                         requires_hr_approval=True,
-                        risk_check_result={"passed": True, "errors": [], "source": "seed"},
+                        risk_check_result=completed_seed_review(),
                         created_by="seed_hr",
                     )
                 )
@@ -104,7 +120,7 @@ def seed() -> None:
                         body="Hi Hoang Kim Ngan,\n\nCongratulations. We are excited to offer you the Product Designer role.\n\nHiLab HR",
                         status=QueueStatus.APPROVED.value,
                         requires_hr_approval=True,
-                        risk_check_result={"passed": True, "errors": [], "source": "seed"},
+                        risk_check_result=completed_seed_review(),
                         created_by="seed_hr",
                         approved_by="demo_hr",
                     )
