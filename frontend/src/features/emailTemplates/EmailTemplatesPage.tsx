@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Grid2X2, List, Mail, Plus, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -21,7 +21,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { EMAIL_TYPES, TEMPLATE_PLACEHOLDERS } from "@/constants/emailTypes";
 import { QUERY_KEYS } from "@/constants/queryKeys";
-import { formatDateTime } from "@/lib/date";
+import { formatRelativeDateTime } from "@/lib/date";
 import { recruitmentApi } from "@/services/recruitmentApi";
 import { useUiStore } from "@/stores/uiStore";
 import type { EmailTemplate } from "@/types/recruitment";
@@ -53,6 +53,8 @@ export function EmailTemplatesPage() {
     const [viewMode, setViewMode] = useState<ViewMode>("table");
     const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<EmailTemplate | null>(null);
+    const [sortBy, setSortBy] = useState("updatedAt");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const templatesQuery = useQuery({
         queryKey: QUERY_KEYS.EMAIL_TEMPLATES,
         queryFn: recruitmentApi.getTemplates,
@@ -102,10 +104,13 @@ export function EmailTemplatesPage() {
         });
     }, [editingTemplate, form]);
 
+    const sortedTemplates = useMemo(() => sortTemplates(templatesQuery.data || [], sortBy, sortOrder), [sortBy, sortOrder, templatesQuery.data]);
+
     const columns: DataTableColumn<EmailTemplate>[] = [
         {
             key: "name",
             header: "Name",
+            sortable: true,
             render: (template) => <span className="font-medium text-slate-950">{template.name}</span>,
         },
         {
@@ -116,12 +121,14 @@ export function EmailTemplatesPage() {
         {
             key: "sensitive",
             header: "Sensitive",
+            sortable: true,
             render: (template) => template.is_sensitive ? <StatusBadge sensitive value="SENSITIVE" /> : "No",
         },
         {
             key: "updatedAt",
             header: "Updated At",
-            render: (template) => formatDateTime(template.updated_at),
+            sortable: true,
+            render: (template) => formatRelativeDateTime(template.updated_at),
         },
         {
             key: "actions",
@@ -184,14 +191,20 @@ export function EmailTemplatesPage() {
                     ) : viewMode === "table" ? (
                         <DataTable
                             columns={columns}
-                            data={templatesQuery.data || []}
+                            data={sortedTemplates}
                             emptyState={<EmptyState description="Create your first recruitment email template." icon={Mail} title="No templates yet" />}
+                            onSortChange={(key, order) => {
+                                setSortBy(key);
+                                setSortOrder(order);
+                            }}
+                            sortBy={sortBy}
+                            sortOrder={sortOrder}
                         />
                     ) : (
                         <TemplateCardGrid
                             onDelete={setDeleteTarget}
                             onEdit={setEditingTemplate}
-                            templates={templatesQuery.data || []}
+                            templates={sortedTemplates}
                         />
                     )}
                 </div>
@@ -286,6 +299,32 @@ export function EmailTemplatesPage() {
             />
         </div>
     );
+}
+
+function sortTemplates(templates: EmailTemplate[], sortBy: string, sortOrder: "asc" | "desc") {
+    const sorted = [...templates].sort((first, second) => getTemplateSortValue(first, sortBy).localeCompare(getTemplateSortValue(second, sortBy)));
+
+    return sortOrder === "asc" ? sorted : sorted.reverse();
+}
+
+function getTemplateSortValue(template: EmailTemplate, sortBy: string) {
+    if (sortBy === "name") {
+        return template.name;
+    }
+
+    if (sortBy === "type") {
+        return template.email_type;
+    }
+
+    if (sortBy === "sensitive") {
+        return String(template.is_sensitive);
+    }
+
+    if (sortBy === "updatedAt") {
+        return template.updated_at;
+    }
+
+    return "";
 }
 
 function FormInput({ control, label, name }: { control: ReturnType<typeof useForm<TemplateFormValues>>["control"]; label: string; name: keyof TemplateFormValues }) {

@@ -1,26 +1,44 @@
-import { Bell, Menu, Search } from "lucide-react";
+import { Bell, ChevronRight, Menu, Search } from "lucide-react";
 import { useMemo } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NAVIGATION_ITEMS } from "@/constants/navigation";
+import { useUiStore } from "@/stores/uiStore";
 
 export function Topbar() {
     const location = useLocation();
-    const breadcrumb = useMemo(() => {
-        const match = NAVIGATION_ITEMS.find((item) => item.href === location.pathname);
-        return match?.title || "Workspace";
+    const toggleMobileSidebar = useUiStore((state) => state.toggleMobileSidebar);
+    const breadcrumbs = useMemo(() => {
+        return buildBreadcrumbs(location.pathname);
     }, [location.pathname]);
 
     return (
         <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border bg-card/95 px-4 backdrop-blur lg:px-6">
-            <Button className="lg:hidden" size="icon" variant="ghost">
+            <Button className="lg:hidden" onClick={toggleMobileSidebar} size="icon" variant="ghost">
                 <Menu className="h-5 w-5" />
             </Button>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1 md:flex-none">
                 <p className="text-xs text-muted-foreground">Workspace</p>
-                <p className="truncate text-sm font-medium text-card-foreground">{breadcrumb}</p>
+                <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1 truncate text-sm">
+                    {breadcrumbs.map((item, index) => {
+                        const isLast = index === breadcrumbs.length - 1;
+
+                        return (
+                            <span className="inline-flex min-w-0 items-center gap-1" key={`${item.href}-${item.title}`}>
+                                {index > 0 && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+                                {isLast ? (
+                                    <span className="truncate font-medium text-card-foreground">{item.title}</span>
+                                ) : (
+                                    <Link className="truncate text-muted-foreground transition-colors hover:text-primary-600" to={item.href}>
+                                        {item.title}
+                                    </Link>
+                                )}
+                            </span>
+                        );
+                    })}
+                </nav>
             </div>
             <div className="ml-auto hidden w-full max-w-md items-center md:flex">
                 <div className="relative w-full">
@@ -42,4 +60,34 @@ export function Topbar() {
             </div>
         </header>
     );
+}
+
+function buildBreadcrumbs(pathname: string) {
+    const exactMatch = NAVIGATION_ITEMS.find((item) => item.href === pathname);
+
+    if (exactMatch) {
+        return exactMatch.href === "/"
+            ? [{ title: "Dashboard", href: "/" }]
+            : [
+                { title: "Dashboard", href: "/" },
+                { title: exactMatch.title, href: exactMatch.href },
+            ];
+    }
+
+    const parentMatch = NAVIGATION_ITEMS
+        .filter((item) => item.href !== "/" && pathname.startsWith(`${item.href}/`))
+        .sort((first, second) => second.href.length - first.href.length)[0];
+
+    if (!parentMatch) {
+        return [
+            { title: "Dashboard", href: "/" },
+            { title: "Workspace", href: pathname },
+        ];
+    }
+
+    return [
+        { title: "Dashboard", href: "/" },
+        { title: parentMatch.title, href: parentMatch.href },
+        { title: "Detail", href: pathname },
+    ];
 }

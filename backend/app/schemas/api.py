@@ -34,10 +34,46 @@ class CandidateUpdate(BaseModel):
 
 class CandidateRead(CandidateBase):
     id: int
+    status_updated_at: datetime | None = None
+    status_updated_by: str | None = None
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CandidateListResponse(BaseModel):
+    items: list[CandidateRead]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class CandidateStatusUpdate(BaseModel):
+    status: str
+    actor: str = "demo_hr"
+
+
+class BulkCandidateStatusUpdate(BaseModel):
+    candidate_ids: list[int] = Field(min_length=1)
+    status: str
+    actor: str = "demo_hr"
+
+
+class BulkCandidateDelete(BaseModel):
+    candidate_ids: list[int] = Field(min_length=1)
+    actor: str = "demo_hr"
+
+
+class BulkActionResult(BaseModel):
+    affected: int
+
+
+class CandidateFilterOptions(BaseModel):
+    positions: list[str]
+    stages: list[str]
+    statuses: list[str]
 
 
 class EmailTemplateBase(BaseModel):
@@ -139,3 +175,17 @@ class ImportResult(BaseModel):
     imported: int
     skipped: int
     errors: list[str] = Field(default_factory=list)
+
+
+class ImportPreviewRow(BaseModel):
+    row_number: int
+    is_valid: bool
+    reason: str | None = None
+    candidate: dict[str, Any]
+
+
+class ImportPreviewResult(BaseModel):
+    total_rows: int
+    valid_rows: int
+    invalid_rows: int
+    rows: list[ImportPreviewRow]

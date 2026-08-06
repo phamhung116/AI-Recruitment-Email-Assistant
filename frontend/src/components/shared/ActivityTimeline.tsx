@@ -1,6 +1,6 @@
 import { Circle } from "lucide-react";
 
-import { formatDateTime } from "@/lib/date";
+import { formatRelativeDateTime } from "@/lib/date";
 
 interface TimelineItem {
     description?: string;
@@ -27,7 +27,7 @@ export function ActivityTimeline({ items }: { items: TimelineItem[] }) {
                             {item.status && <span className="text-xs text-slate-500">{item.status}</span>}
                         </div>
                         {item.description && <p className="text-sm text-slate-500">{item.description}</p>}
-                        <p className="text-xs text-slate-400">{formatDateTime(item.time)}</p>
+                        <p className="text-xs text-slate-400">{formatRelativeDateTime(item.time)}</p>
                     </div>
                 </div>
             ))}

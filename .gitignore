@@ -6,6 +6,7 @@ __pycache__/
 
 node_modules/
 dist/
+.tmp/
 
 .tmp_docx_extract/
 .tmp_coding_standards.zip

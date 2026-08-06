@@ -10,8 +10,8 @@ export const SelectValue = SelectPrimitive.Value;
 
 export const SelectTrigger = forwardRef<
     ElementRef<typeof SelectPrimitive.Trigger>,
-    ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ children, className, ...props }, ref) => (
+    ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> & { hideIcon?: boolean }
+>(({ children, className, hideIcon = false, ...props }, ref) => (
     <SelectPrimitive.Trigger
         className={cn(
             "flex h-9 w-full items-center justify-between rounded-md border border-input bg-card px-3 text-sm text-card-foreground shadow-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-primary-950/50",
@@ -21,9 +21,11 @@ export const SelectTrigger = forwardRef<
         {...props}
     >
         {children}
-        <SelectPrimitive.Icon asChild>
-            <ChevronDown className="h-4 w-4 opacity-60" />
-        </SelectPrimitive.Icon>
+        {!hideIcon && (
+            <SelectPrimitive.Icon asChild>
+                <ChevronDown className="h-4 w-4 opacity-60" />
+            </SelectPrimitive.Icon>
+        )}
     </SelectPrimitive.Trigger>
 ));
 

@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { EMAIL_TYPES } from "@/constants/emailTypes";
 import { QUERY_KEYS } from "@/constants/queryKeys";
-import { formatDateTime } from "@/lib/date";
+import { formatRelativeDateTime } from "@/lib/date";
 import { recruitmentApi } from "@/services/recruitmentApi";
 import { useUiStore } from "@/stores/uiStore";
 import type { EmailQueueItem } from "@/types/recruitment";
@@ -37,6 +37,8 @@ export function EmailQueuePage() {
     const [emailTypeFilter, setEmailTypeFilter] = useState(ALL_VALUE);
     const [selectedItem, setSelectedItem] = useState<EmailQueueItem | null>(null);
     const [pendingAction, setPendingAction] = useState<QueueAction | null>(null);
+    const [sortBy, setSortBy] = useState("createdAt");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const queueQuery = useQuery({
         queryKey: QUERY_KEYS.EMAIL_QUEUE,
         queryFn: recruitmentApi.getEmailQueue,
@@ -75,19 +77,22 @@ export function EmailQueuePage() {
         onError: (error) => showToast(error.message, "error"),
     });
     const filteredItems = useMemo(() => {
-        return (queueQuery.data || []).filter((item) => {
+        const items = (queueQuery.data || []).filter((item) => {
             const matchesSearch = !search || `${item.candidate?.full_name || ""} ${item.to_email}`.toLowerCase().includes(search.toLowerCase());
             const matchesStatus = statusFilter === ALL_VALUE || item.status === statusFilter;
             const matchesEmailType = emailTypeFilter === ALL_VALUE || item.email_type === emailTypeFilter;
 
             return matchesSearch && matchesStatus && matchesEmailType;
         });
-    }, [emailTypeFilter, queueQuery.data, search, statusFilter]);
+
+        return sortItems(items, sortBy, sortOrder);
+    }, [emailTypeFilter, queueQuery.data, search, sortBy, sortOrder, statusFilter]);
 
     const columns: DataTableColumn<EmailQueueItem>[] = [
         {
             key: "candidate",
             header: "Candidate",
+            sortable: true,
             render: (item) => item.candidate?.full_name || `Candidate #${item.candidate_id}`,
         },
         {
@@ -108,7 +113,8 @@ export function EmailQueuePage() {
         {
             key: "createdAt",
             header: "Created At",
-            render: (item) => formatDateTime(item.created_at),
+            sortable: true,
+            render: (item) => formatRelativeDateTime(item.created_at),
         },
         {
             key: "actions",
@@ -147,6 +153,12 @@ export function EmailQueuePage() {
                     columns={columns}
                     data={filteredItems}
                     emptyState={<EmptyState description="Generate an email draft from a candidate profile to populate the queue." icon={Inbox} title="No queue items found" />}
+                    onSortChange={(key, order) => {
+                        setSortBy(key);
+                        setSortOrder(order);
+                    }}
+                    sortBy={sortBy}
+                    sortOrder={sortOrder}
                 />
             )}
             <EmailPreviewDrawer
@@ -167,6 +179,37 @@ export function EmailQueuePage() {
             />
         </div>
     );
+}
+
+function sortItems(items: EmailQueueItem[], sortBy: string, sortOrder: "asc" | "desc") {
+    const sorted = [...items].sort((first, second) => {
+        const firstValue = getSortValue(first, sortBy);
+        const secondValue = getSortValue(second, sortBy);
+
+        return firstValue.localeCompare(secondValue);
+    });
+
+    return sortOrder === "asc" ? sorted : sorted.reverse();
+}
+
+function getSortValue(item: EmailQueueItem, sortBy: string) {
+    if (sortBy === "candidate") {
+        return item.candidate?.full_name || "";
+    }
+
+    if (sortBy === "type") {
+        return item.email_type;
+    }
+
+    if (sortBy === "status") {
+        return item.status;
+    }
+
+    if (sortBy === "createdAt") {
+        return item.created_at;
+    }
+
+    return "";
 }
 
 function EmailPreviewDrawer({ item, onAction, onChange, onClose, onSave }: { item: EmailQueueItem | null; onAction: (action: QueueAction) => void; onChange: (item: EmailQueueItem) => void; onClose: () => void; onSave: () => void }) {

@@ -5,7 +5,9 @@ import type {
     EmailHistoryItem,
     EmailQueueItem,
     EmailTemplate,
+    ImportPreviewResult,
     ImportResult,
+    PaginatedResponse,
 } from "@/types/recruitment";
 
 import { httpClient } from "./httpClient";
@@ -15,11 +17,21 @@ export interface CandidateFilters {
     position?: string;
     stage?: string;
     status?: string;
+    page?: number;
+    page_size?: number;
+    sort_by?: string;
+    sort_order?: "asc" | "desc";
 }
 
 export interface QueueFilters {
     status?: string;
     emailType?: string;
+}
+
+export interface CandidateFilterOptions {
+    positions: string[];
+    stages: string[];
+    statuses: string[];
 }
 
 export const recruitmentApi = {
@@ -28,15 +40,38 @@ export const recruitmentApi = {
         return response.data;
     },
     getCandidates: async (params: CandidateFilters = {}) => {
-        const response = await httpClient.get<Candidate[]>("/candidates", { params });
+        const response = await httpClient.get<PaginatedResponse<Candidate>>("/candidates", { params });
         return response.data;
     },
     getCandidate: async (candidateId: number) => {
         const response = await httpClient.get<Candidate>(`/candidates/${candidateId}`);
         return response.data;
     },
+    getCandidateFilterOptions: async () => {
+        const response = await httpClient.get<CandidateFilterOptions>("/candidates/filter-options");
+        return response.data;
+    },
     updateCandidate: async (candidateId: number, payload: Partial<Candidate>) => {
         const response = await httpClient.patch<Candidate>(`/candidates/${candidateId}`, payload);
+        return response.data;
+    },
+    updateCandidateStatus: async (candidateId: number, status: string, actor = "Hieu") => {
+        const response = await httpClient.patch<Candidate>(`/candidates/${candidateId}/status`, { status, actor });
+        return response.data;
+    },
+    bulkUpdateCandidateStatus: async (candidateIds: number[], status: string, actor = "Hieu") => {
+        const response = await httpClient.post<{ affected: number }>("/candidates/bulk/status", {
+            candidate_ids: candidateIds,
+            status,
+            actor,
+        });
+        return response.data;
+    },
+    bulkDeleteCandidates: async (candidateIds: number[], actor = "Hieu") => {
+        const response = await httpClient.post<{ affected: number }>("/candidates/bulk/delete", {
+            candidate_ids: candidateIds,
+            actor,
+        });
         return response.data;
     },
     importCandidates: async (file: File, onUploadProgress?: (progress: number) => void) => {
@@ -53,6 +88,13 @@ export const recruitmentApi = {
             },
         });
 
+        return response.data;
+    },
+    previewCandidateImport: async (file: File) => {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const response = await httpClient.post<ImportPreviewResult>("/candidates/import/preview", formData);
         return response.data;
     },
     getTemplates: async () => {

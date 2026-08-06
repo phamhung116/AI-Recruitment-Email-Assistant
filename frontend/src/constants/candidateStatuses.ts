@@ -1,0 +1,9 @@
+export const CANDIDATE_STATUSES = [
+    "PENDING",
+    "PASS_CV",
+    "REJECT_CV",
+    "INTERVIEW_CONFIRMED",
+    "PASS_INTERVIEW",
+    "REJECT_INTERVIEW",
+    "OFFER_ACCEPTED",
+] as const;

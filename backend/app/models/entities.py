@@ -48,6 +48,8 @@ class Candidate(Base):
     position: Mapped[str | None] = mapped_column(String(255), index=True)
     stage: Mapped[str | None] = mapped_column(String(100), default="NEW", index=True)
     status: Mapped[str] = mapped_column(String(80), default=CandidateStatus.PENDING.value, index=True)
+    status_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status_updated_by: Mapped[str | None] = mapped_column(String(255))
     interview_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     interviewer: Mapped[str | None] = mapped_column(String(255))
     note: Mapped[str | None] = mapped_column(Text)

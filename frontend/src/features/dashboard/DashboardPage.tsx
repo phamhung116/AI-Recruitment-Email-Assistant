@@ -49,7 +49,7 @@ export function DashboardPage() {
     const error = statsQuery.error || candidatesQuery.error || queueQuery.error;
 
     const candidateStatusData = Object.entries(
-        (candidatesQuery.data || []).reduce<Record<string, number>>((result, candidate) => {
+        (candidatesQuery.data?.items || []).reduce<Record<string, number>>((result, candidate) => {
             result[candidate.status] = (result[candidate.status] || 0) + 1;
             return result;
         }, {}),

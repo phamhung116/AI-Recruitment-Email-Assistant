@@ -9,7 +9,7 @@ import { LoadingSkeleton } from "@/components/shared/LoadingSkeleton";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { SearchFilterBar } from "@/components/shared/SearchFilterBar";
 import { QUERY_KEYS } from "@/constants/queryKeys";
-import { formatDateTime } from "@/lib/date";
+import { formatRelativeDateTime } from "@/lib/date";
 import { recruitmentApi } from "@/services/recruitmentApi";
 import type { AuditLogItem } from "@/types/recruitment";
 
@@ -45,7 +45,7 @@ export function AuditLogsPage() {
         {
             key: "timestamp",
             header: "Timestamp",
-            render: (item) => formatDateTime(item.created_at),
+            render: (item) => formatRelativeDateTime(item.created_at),
         },
         {
             key: "detail",

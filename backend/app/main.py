@@ -10,6 +10,7 @@ from app.api.emailTemplateRoutes import router as email_template_router
 from app.api.routes import router
 from app.core.config import get_settings
 from app.db.database import Base, engine
+from app.db.schemaMaintenance import ensure_candidate_status_metadata_columns
 
 
 def create_app() -> FastAPI:
@@ -38,3 +39,4 @@ app = create_app()
 @app.on_event("startup")
 def create_tables() -> None:
     Base.metadata.create_all(bind=engine)
+    ensure_candidate_status_metadata_columns()

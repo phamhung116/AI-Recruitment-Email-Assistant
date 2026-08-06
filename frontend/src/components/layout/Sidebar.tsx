@@ -7,16 +7,28 @@ import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/uiStore";
 
 export function Sidebar() {
+    const closeMobileSidebar = useUiStore((state) => state.closeMobileSidebar);
     const isSidebarCollapsed = useUiStore((state) => state.isSidebarCollapsed);
+    const isMobileSidebarOpen = useUiStore((state) => state.isMobileSidebarOpen);
     const toggleSidebar = useUiStore((state) => state.toggleSidebar);
 
     return (
-        <aside
-            className={cn(
-                "sticky top-0 hidden h-screen shrink-0 border-r border-border bg-card transition-all duration-200 lg:flex lg:flex-col",
-                isSidebarCollapsed ? "w-20" : "w-72",
+        <>
+            {isMobileSidebarOpen && (
+                <button
+                    aria-label="Close navigation"
+                    className="fixed inset-0 z-40 bg-gray-900/30 backdrop-blur-[1px] lg:hidden"
+                    onClick={closeMobileSidebar}
+                    type="button"
+                />
             )}
-        >
+            <aside
+                className={cn(
+                    "fixed inset-y-0 left-0 z-50 flex h-screen w-72 shrink-0 flex-col border-r border-border bg-card transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:translate-x-0",
+                    isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+                    isSidebarCollapsed ? "lg:w-20" : "lg:w-72",
+                )}
+            >
             <div className="flex h-16 items-center justify-between border-b border-border px-4">
                 <div className="flex min-w-0 items-center gap-3">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-500 text-white shadow-sm shadow-primary-900/10">
@@ -48,6 +60,7 @@ export function Sidebar() {
                         )}
                         end={item.href === "/"}
                         key={item.href}
+                        onClick={closeMobileSidebar}
                         to={item.href}
                     >
                         <item.icon className="h-4 w-4 shrink-0" />
@@ -55,6 +68,7 @@ export function Sidebar() {
                     </NavLink>
                 ))}
             </nav>
-        </aside>
+            </aside>
+        </>
     );
 }

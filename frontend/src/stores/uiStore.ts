@@ -9,16 +9,21 @@ interface ToastState {
 }
 
 interface UiStore {
+    closeMobileSidebar: () => void;
     isSidebarCollapsed: boolean;
+    isMobileSidebarOpen: boolean;
     toast: ToastState | null;
     hideToast: () => void;
     showToast: (message: string, variant?: ToastVariant) => void;
+    toggleMobileSidebar: () => void;
     toggleSidebar: () => void;
 }
 
 export const useUiStore = create<UiStore>((set) => ({
     isSidebarCollapsed: false,
+    isMobileSidebarOpen: false,
     toast: null,
+    closeMobileSidebar: () => set({ isMobileSidebarOpen: false }),
     hideToast: () => set({ toast: null }),
     showToast: (message, variant = "info") => {
         set({
@@ -29,5 +34,6 @@ export const useUiStore = create<UiStore>((set) => ({
             },
         });
     },
+    toggleMobileSidebar: () => set((state) => ({ isMobileSidebarOpen: !state.isMobileSidebarOpen })),
     toggleSidebar: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
 }));

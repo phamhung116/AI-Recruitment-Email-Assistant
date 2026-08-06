@@ -1,11 +1,13 @@
 from datetime import datetime, timedelta, timezone
 
 from app.db.database import Base, SessionLocal, engine
+from app.db.schemaMaintenance import ensure_candidate_status_metadata_columns
 from app.models import Candidate, EmailQueue, EmailTemplate, EmailType, QueueStatus
 
 
 def seed() -> None:
     Base.metadata.create_all(bind=engine)
+    ensure_candidate_status_metadata_columns()
     db = SessionLocal()
     try:
         seed_candidates(db)

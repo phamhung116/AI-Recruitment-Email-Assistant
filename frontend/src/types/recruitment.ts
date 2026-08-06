@@ -34,11 +34,21 @@ export interface Candidate {
     position: string | null;
     stage: string | null;
     status: CandidateStatus | string;
+    status_updated_at: string | null;
+    status_updated_by: string | null;
     interview_time: string | null;
     interviewer: string | null;
     note: string | null;
     created_at: string;
     updated_at: string;
+}
+
+export interface PaginatedResponse<TItem> {
+    items: TItem[];
+    total: number;
+    page: number;
+    page_size: number;
+    pages: number;
 }
 
 export interface EmailTemplate {
@@ -104,4 +114,18 @@ export interface ImportResult {
     imported: number;
     skipped: number;
     errors: string[];
+}
+
+export interface ImportPreviewRow {
+    row_number: number;
+    is_valid: boolean;
+    reason: string | null;
+    candidate: Partial<Candidate>;
+}
+
+export interface ImportPreviewResult {
+    total_rows: number;
+    valid_rows: number;
+    invalid_rows: number;
+    rows: ImportPreviewRow[];
 }
