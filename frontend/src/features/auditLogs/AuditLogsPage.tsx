@@ -61,7 +61,7 @@ export function AuditLogsPage() {
     return (
         <div className="space-y-6">
             <PageHeader
-                description="System-level activity log for email generation, approvals, sends, cancellations, and candidate updates."
+                description="System-level activity log for generation, Agent review, approvals, simulations, cancellations, and candidate updates."
                 title="Audit Logs"
             />
             <SearchFilterBar
