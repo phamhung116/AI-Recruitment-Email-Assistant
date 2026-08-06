@@ -84,6 +84,8 @@ function queueItem(overrides: Partial<EmailQueueItem> = {}): EmailQueueItem {
             position: "Frontend Developer",
             stage: "CV_SCREENING",
             status: "PASS_CV",
+            status_updated_at: null,
+            status_updated_by: null,
             interview_time: "2026-08-08T10:24:00+07:00",
             interviewer: "Linh Tran",
             note: null,

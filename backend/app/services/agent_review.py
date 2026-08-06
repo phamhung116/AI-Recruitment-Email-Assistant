@@ -160,14 +160,17 @@ def retain_agent_review(
     deterministic_result: dict,
     previous_result: dict | None,
 ) -> dict:
-    if not previous_result or "agent_review" not in previous_result:
+    if not previous_result:
         return deterministic_result
 
     merged = dict(deterministic_result)
-    merged["agent_review"] = previous_result["agent_review"]
-    merged["requires_human_review"] = bool(
-        previous_result.get("requires_human_review", False)
-    )
+    for key in ("agent_review", "draft_version", "content_hash", "async_review"):
+        if key in previous_result:
+            merged[key] = previous_result[key]
+
+    if "requires_human_review" in previous_result:
+        merged["requires_human_review"] = bool(previous_result["requires_human_review"])
+
     return merged
 
 
