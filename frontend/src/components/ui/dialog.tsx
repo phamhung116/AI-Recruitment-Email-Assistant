@@ -37,13 +37,31 @@ export function DialogHeader({ className, ...props }: ComponentPropsWithoutRef<"
     return <div className={cn("space-y-1", className)} {...props} />;
 }
 
-export function DialogTitle({ className, ...props }: ComponentPropsWithoutRef<"h2">) {
-    return <h2 className={cn("text-lg font-semibold text-card-foreground", className)} {...props} />;
-}
+export const DialogTitle = forwardRef<
+    ElementRef<typeof DialogPrimitive.Title>,
+    ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
+>(({ className, ...props }, ref) => (
+    <DialogPrimitive.Title
+        className={cn("text-lg font-semibold text-card-foreground", className)}
+        ref={ref}
+        {...props}
+    />
+));
 
-export function DialogDescription({ className, ...props }: ComponentPropsWithoutRef<"p">) {
-    return <p className={cn("text-sm text-muted-foreground", className)} {...props} />;
-}
+DialogTitle.displayName = DialogPrimitive.Title.displayName;
+
+export const DialogDescription = forwardRef<
+    ElementRef<typeof DialogPrimitive.Description>,
+    ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
+>(({ className, ...props }, ref) => (
+    <DialogPrimitive.Description
+        className={cn("text-sm text-muted-foreground", className)}
+        ref={ref}
+        {...props}
+    />
+));
+
+DialogDescription.displayName = DialogPrimitive.Description.displayName;
 
 export function DialogFooter({ className, ...props }: ComponentPropsWithoutRef<"div">) {
     return <div className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)} {...props} />;
