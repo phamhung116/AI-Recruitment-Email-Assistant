@@ -41,6 +41,18 @@ export interface Candidate {
     updated_at: string;
 }
 
+export interface CandidateUpdatePayload {
+    full_name?: string;
+    email?: string | null;
+    phone?: string | null;
+    position?: string | null;
+    stage?: string | null;
+    status?: CandidateStatus | string;
+    interview_time?: string | null;
+    interviewer?: string | null;
+    note?: string | null;
+}
+
 export interface EmailTemplate {
     id: number;
     name: string;
@@ -62,7 +74,7 @@ export interface EmailQueueItem {
     body: string;
     status: QueueStatus | string;
     requires_hr_approval: boolean;
-    risk_check_result: Record<string, unknown>;
+    risk_check_result: RiskCheckResult;
     created_by: string | null;
     approved_by: string | null;
     sent_at: string | null;
@@ -104,4 +116,86 @@ export interface ImportResult {
     imported: number;
     skipped: number;
     errors: string[];
+}
+
+export type AgentReviewStatus =
+    | "completed"
+    | "deterministic_blocked"
+    | "disabled"
+    | "unavailable";
+
+export interface AgentSemanticIssue {
+    rule_id: string;
+    severity: "info" | "warning" | "error" | "blocker";
+    message: string;
+    evidence: string;
+    requires_human_review: boolean;
+}
+
+export interface DeterministicValidationIssue {
+    rule_id: string;
+    severity: "info" | "warning" | "error" | "blocker";
+    message: string;
+    evidence: Record<string, unknown>;
+    remediation: string;
+    is_blocking: boolean;
+    source: "deterministic" | "agent";
+}
+
+export interface AgentReviewResult {
+    status: AgentReviewStatus;
+    draft_subject: string;
+    draft_body: string;
+    issues: AgentSemanticIssue[];
+    uncertainty: {
+        has_uncertainty: boolean;
+        reason: string | null;
+    };
+    review_summary: string;
+    requires_human_review: boolean;
+    semantic_review_available: boolean;
+    model_metadata: {
+        provider: string;
+        model: string;
+        prompt_version: string;
+        skill_name: string;
+        skill_version: string;
+        attempts: number;
+    };
+    trace: Array<{
+        step: string;
+        status: string;
+        detail: string;
+    }>;
+}
+
+export interface RiskCheckResult {
+    passed?: boolean;
+    issues?: DeterministicValidationIssue[];
+    errors?: string[];
+    checked_at?: string;
+    requires_human_review?: boolean;
+    agent_review?: AgentReviewResult;
+    draft_version?: number;
+    content_hash?: string;
+    async_review?: AsyncReviewMetadata;
+    [key: string]: unknown;
+}
+
+export type AsyncReviewStatus =
+    | "QUEUED"
+    | "REVIEWING"
+    | "COMPLETED"
+    | "UNAVAILABLE"
+    | "FAILED"
+    | "STALE";
+
+export interface AsyncReviewMetadata {
+    status: AsyncReviewStatus;
+    draft_version: number;
+    review_version?: number;
+    content_hash?: string;
+    updated_at?: string | null;
+    completed_at?: string;
+    failure_reason?: string;
 }

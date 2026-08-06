@@ -1,6 +1,8 @@
 import type {
+    AgentReviewResult,
     AuditLogItem,
     Candidate,
+    CandidateUpdatePayload,
     DashboardStats,
     EmailHistoryItem,
     EmailQueueItem,
@@ -35,7 +37,7 @@ export const recruitmentApi = {
         const response = await httpClient.get<Candidate>(`/candidates/${candidateId}`);
         return response.data;
     },
-    updateCandidate: async (candidateId: number, payload: Partial<Candidate>) => {
+    updateCandidate: async (candidateId: number, payload: CandidateUpdatePayload) => {
         const response = await httpClient.patch<Candidate>(`/candidates/${candidateId}`, payload);
         return response.data;
     },
@@ -82,6 +84,10 @@ export const recruitmentApi = {
         const response = await httpClient.get<EmailQueueItem[]>("/email-queue");
         return response.data;
     },
+    getEmailQueueItem: async (queueId: number) => {
+        const response = await httpClient.get<EmailQueueItem>(`/email-queue/${queueId}`);
+        return response.data;
+    },
     updateEmailQueue: async (queueId: number, payload: Partial<EmailQueueItem>) => {
         const response = await httpClient.patch<EmailQueueItem>(`/email-queue/${queueId}`, payload);
         return response.data;
@@ -96,6 +102,13 @@ export const recruitmentApi = {
     },
     cancelEmailQueueItem: async (queueId: number) => {
         const response = await httpClient.post<EmailQueueItem>(`/email-queue/${queueId}/cancel`);
+        return response.data;
+    },
+    reviewEmailDraft: async (queueId: number, actor = "demo_hr") => {
+        const response = await httpClient.post<AgentReviewResult>("/api/v1/agent/review-draft", {
+            queue_id: queueId,
+            actor,
+        });
         return response.data;
     },
     getEmailHistory: async (candidateId?: number) => {
