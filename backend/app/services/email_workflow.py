@@ -1,99 +1,188 @@
-import re
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.constants.auditActions import AI_GENERATE_EMAIL, APPROVE_EMAIL, CANCEL_EMAIL, SEND_EMAIL
+from app.constants.auditActions import AI_GENERATE_EMAIL, APPROVE_EMAIL, AUTO_CANCEL_EMAIL, CANCEL_EMAIL, QUEUE_AGENT_REVIEW, SEND_EMAIL
 from app.constants.messages import (
     CANDIDATE_NOT_FOUND_MESSAGE,
     EMAIL_QUEUE_NOT_FOUND_MESSAGE,
     EMAIL_REQUIRES_APPROVAL_MESSAGE,
-    PENDING_STATUS_MESSAGE,
 )
 from app.models import Candidate, EmailHistory, EmailQueue, EmailTemplate, QueueStatus
 from app.services.ai_email import get_ai_email_service
+from app.services.agent_review import retain_agent_review
 from app.services.audit import log_action
-from app.services.rules import SEND_STATUS_TRANSITIONS, SENSITIVE_EMAIL_TYPES, email_type_for_status
-
-
-PLACEHOLDER_RE = re.compile(r"{{\s*([a-zA-Z0-9_]+)\s*}}")
+from app.services.draft_review_queue import create_review_outbox_event, prepare_queued_review, review_metadata
+from app.services.rules import QueueAction, SENSITIVE_EMAIL_TYPES, email_type_for_status, is_queue_action_allowed
+from app.services.validation import validate_email_draft
 
 
 def generate_email_draft(db: Session, candidate_id: int, requested_email_type: str | None, created_by: str) -> EmailQueue:
-    candidate = db.get(Candidate, candidate_id)
-    if not candidate:
-        raise HTTPException(status_code=404, detail=CANDIDATE_NOT_FOUND_MESSAGE)
+    try:
+        candidate = db.get(Candidate, candidate_id)
+        if not candidate:
+            raise HTTPException(status_code=404, detail=CANDIDATE_NOT_FOUND_MESSAGE)
 
-    expected_email_type = email_type_for_status(candidate.status)
-    if expected_email_type is None:
-        raise HTTPException(status_code=400, detail=PENDING_STATUS_MESSAGE)
+        email_type = requested_email_type or email_type_for_status(candidate.status) or ""
+        template = (
+            db.query(EmailTemplate).filter(EmailTemplate.email_type == email_type).first()
+            if email_type
+            else None
+        )
+        risk = build_risk_check(db, candidate, template, email_type)
+        _raise_for_invalid_risk(risk)
+        if template is None:
+            raise RuntimeError("Draft validation passed without a template.")
 
-    email_type = requested_email_type or expected_email_type
-    if email_type != expected_email_type:
-        raise HTTPException(status_code=400, detail=f"Email type {email_type} does not match status {candidate.status}. Expected {expected_email_type}.")
+        subject, body = get_ai_email_service().generate(candidate, template, email_type)
+        deterministic_risk = build_risk_check(
+            db,
+            candidate,
+            template,
+            email_type,
+            rendered_subject=subject,
+            rendered_body=body,
+        )
+        _raise_for_invalid_risk(deterministic_risk)
+        queued_risk = prepare_queued_review(
+            deterministic_risk,
+            subject=subject,
+            body=body,
+        )
+        requires_approval = email_type in SENSITIVE_EMAIL_TYPES or template.is_sensitive
+        queue_item = EmailQueue(
+            candidate_id=candidate.id,
+            email_type=email_type,
+            to_email=candidate.email,
+            subject=subject,
+            body=body,
+            status=QueueStatus.PENDING_APPROVAL.value if requires_approval else QueueStatus.DRAFT.value,
+            requires_hr_approval=requires_approval,
+            risk_check_result=queued_risk,
+            created_by=created_by,
+        )
+        db.add(queue_item)
+        db.flush()
+        create_review_outbox_event(db, queue_item)
+        metadata = review_metadata(queue_item)
+        log_action(
+            db,
+            AI_GENERATE_EMAIL,
+            "email_queue",
+            queue_item.id,
+            created_by,
+            {"candidate_id": candidate.id, "email_type": email_type},
+        )
+        log_action(
+            db,
+            QUEUE_AGENT_REVIEW,
+            "email_queue",
+            queue_item.id,
+            created_by,
+            {
+                "draft_version": metadata["draft_version"],
+                "content_hash": metadata["content_hash"],
+            },
+        )
+        db.commit()
+        db.refresh(queue_item)
+        return queue_item
+    except Exception:
+        db.rollback()
+        raise
 
-    template = db.query(EmailTemplate).filter(EmailTemplate.email_type == email_type).first()
-    risk = build_risk_check(db, candidate, template, email_type)
-    if not risk["passed"]:
-        raise HTTPException(status_code=400, detail=risk)
 
-    subject, body = get_ai_email_service().generate(candidate, template, email_type)
-    requires_approval = email_type in SENSITIVE_EMAIL_TYPES or template.is_sensitive
-    queue_status = QueueStatus.PENDING_APPROVAL.value if requires_approval else QueueStatus.DRAFT.value
-    queue_item = EmailQueue(
-        candidate_id=candidate.id,
+def build_risk_check(
+    db: Session,
+    candidate: Candidate,
+    template: EmailTemplate | None,
+    email_type: str,
+    rendered_subject: str | None = None,
+    rendered_body: str | None = None,
+) -> dict:
+    result = validate_email_draft(
+        db=db,
+        candidate=candidate,
+        template=template,
         email_type=email_type,
-        to_email=candidate.email,
-        subject=subject,
-        body=body,
-        status=queue_status,
-        requires_hr_approval=requires_approval,
-        risk_check_result=risk,
-        created_by=created_by,
+        rendered_subject=rendered_subject,
+        rendered_body=rendered_body,
     )
-    db.add(queue_item)
-    db.flush()
-    log_action(db, AI_GENERATE_EMAIL, "email_queue", queue_item.id, created_by, {"candidate_id": candidate.id, "email_type": email_type})
-    db.commit()
-    db.refresh(queue_item)
-    return queue_item
+    return result.model_dump(mode="json")
 
 
-def build_risk_check(db: Session, candidate: Candidate, template: EmailTemplate | None, email_type: str) -> dict:
-    errors: list[str] = []
-    if not candidate.email:
-        errors.append("Candidate must have email.")
-    if email_type_for_status(candidate.status) is None:
-        errors.append(PENDING_STATUS_MESSAGE)
-    elif email_type_for_status(candidate.status) != email_type:
-        errors.append("Email type does not match candidate status.")
-    if not template:
-        errors.append("Template must exist.")
-    else:
-        missing = [key for key in template.required_placeholders if not _candidate_placeholder_value(candidate, key)]
-        if missing:
-            errors.append(f"Template missing required placeholder values: {', '.join(missing)}.")
-        unresolved = sorted(set(PLACEHOLDER_RE.findall(template.subject + "\n" + template.body)) - _supported_placeholders())
-        if unresolved:
-            errors.append(f"Template contains unsupported placeholders: {', '.join(unresolved)}.")
-    already_sent = (
-        db.query(EmailHistory)
-        .filter(EmailHistory.candidate_id == candidate.id, EmailHistory.email_type == email_type)
-        .first()
-    )
-    if already_sent:
-        errors.append("A SENT email history already exists for this candidate and email type.")
-    if email_type in SENSITIVE_EMAIL_TYPES and template and not template.is_sensitive:
-        errors.append("Sensitive email template must be marked is_sensitive=true.")
+def update_email_draft(
+    db: Session,
+    queue_id: int,
+    subject: str | None = None,
+    body: str | None = None,
+) -> EmailQueue:
+    try:
+        item = _get_queue_item(db, queue_id)
+        _require_queue_action(item, QueueAction.EDIT)
 
-    return {"passed": not errors, "errors": errors, "checked_at": datetime.now(timezone.utc).isoformat()}
+        updated_subject = subject if subject is not None else item.subject
+        updated_body = body if body is not None else item.body
+        content_changed = updated_subject != item.subject or updated_body != item.body
+        if not content_changed:
+            return item
+
+        template = _get_email_template(db, item.email_type)
+        deterministic_risk = build_risk_check(
+            db=db,
+            candidate=item.candidate,
+            template=template,
+            email_type=item.email_type,
+            rendered_subject=updated_subject,
+            rendered_body=updated_body,
+        )
+        _raise_for_invalid_risk(deterministic_risk)
+        queued_risk = prepare_queued_review(
+            deterministic_risk,
+            subject=updated_subject,
+            body=updated_body,
+            previous_result=item.risk_check_result,
+        )
+
+        item.subject = updated_subject
+        item.body = updated_body
+        item.risk_check_result = queued_risk
+        item.requires_hr_approval = item.email_type in SENSITIVE_EMAIL_TYPES or bool(
+            template and template.is_sensitive
+        )
+        item.status = (
+            QueueStatus.PENDING_APPROVAL.value
+            if item.requires_hr_approval
+            else QueueStatus.DRAFT.value
+        )
+        item.approved_by = None
+        create_review_outbox_event(db, item)
+        metadata = review_metadata(item)
+        log_action(
+            db,
+            QUEUE_AGENT_REVIEW,
+            "email_queue",
+            item.id,
+            item.created_by or "demo_hr",
+            {
+                "draft_version": metadata["draft_version"],
+                "content_hash": metadata["content_hash"],
+            },
+        )
+
+        db.commit()
+        db.refresh(item)
+        return item
+    except Exception:
+        db.rollback()
+        raise
 
 
 def approve_email(db: Session, queue_id: int, actor: str = "demo_hr") -> EmailQueue:
     item = _get_queue_item(db, queue_id)
-    if item.status in {QueueStatus.SENT.value, QueueStatus.CANCELLED.value}:
-        raise HTTPException(status_code=400, detail="Cannot approve sent or cancelled email.")
+    _require_queue_action(item, QueueAction.APPROVE)
+    _validate_queue_item(db, item)
     item.status = QueueStatus.APPROVED.value
     item.approved_by = actor
     log_action(db, APPROVE_EMAIL, "email_queue", item.id, actor)
@@ -104,8 +193,7 @@ def approve_email(db: Session, queue_id: int, actor: str = "demo_hr") -> EmailQu
 
 def cancel_email(db: Session, queue_id: int, actor: str = "demo_hr") -> EmailQueue:
     item = _get_queue_item(db, queue_id)
-    if item.status == QueueStatus.SENT.value:
-        raise HTTPException(status_code=400, detail="Cannot cancel sent email.")
+    _require_queue_action(item, QueueAction.CANCEL)
     item.status = QueueStatus.CANCELLED.value
     log_action(db, CANCEL_EMAIL, "email_queue", item.id, actor)
     db.commit()
@@ -114,40 +202,86 @@ def cancel_email(db: Session, queue_id: int, actor: str = "demo_hr") -> EmailQue
 
 
 def send_email(db: Session, queue_id: int, actor: str = "demo_hr") -> EmailQueue:
-    item = _get_queue_item(db, queue_id)
-    if item.requires_hr_approval and item.status != QueueStatus.APPROVED.value:
-        raise HTTPException(status_code=400, detail=EMAIL_REQUIRES_APPROVAL_MESSAGE)
-    if item.status in {QueueStatus.SENT.value, QueueStatus.CANCELLED.value, QueueStatus.FAILED.value}:
-        raise HTTPException(status_code=400, detail=f"Cannot send email with status {item.status}.")
-    if "mock_fail" in item.to_email:
-        item.status = QueueStatus.FAILED.value
-        log_action(db, SEND_EMAIL, "email_queue", item.id, actor, {"simulation": "failed"})
+    try:
+        item = _get_queue_item(db, queue_id)
+        if (
+            item.requires_hr_approval
+            and item.status in {QueueStatus.DRAFT.value, QueueStatus.PENDING_APPROVAL.value}
+        ):
+            raise HTTPException(status_code=400, detail=EMAIL_REQUIRES_APPROVAL_MESSAGE)
+        _require_queue_action(item, QueueAction.SIMULATE_SEND)
+        _validate_queue_item(db, item)
+        if "mock_fail" in item.to_email:
+            item.status = QueueStatus.FAILED.value
+            log_action(db, SEND_EMAIL, "email_queue", item.id, actor, {"simulation": "failed"})
+            db.commit()
+            db.refresh(item)
+            return item
+
+        now = datetime.now(timezone.utc)
+        item.status = QueueStatus.SENT.value
+        item.sent_at = now
+        db.add(
+            EmailHistory(
+                candidate_id=item.candidate_id,
+                email_type=item.email_type,
+                to_email=item.to_email,
+                subject=item.subject,
+                body=item.body,
+                sent_by=actor,
+                sent_at=now,
+            )
+        )
+        cancelled_count = _cancel_superseded_drafts(db, item, actor)
+        log_action(
+            db,
+            SEND_EMAIL,
+            "email_queue",
+            item.id,
+            actor,
+            {"simulation": "sent", "auto_cancelled_count": cancelled_count},
+        )
         db.commit()
         db.refresh(item)
         return item
+    except Exception:
+        db.rollback()
+        raise
 
-    now = datetime.now(timezone.utc)
-    item.status = QueueStatus.SENT.value
-    item.sent_at = now
-    db.add(
-        EmailHistory(
-            candidate_id=item.candidate_id,
-            email_type=item.email_type,
-            to_email=item.to_email,
-            subject=item.subject,
-            body=item.body,
-            sent_by=actor,
-            sent_at=now,
+
+def _cancel_superseded_drafts(db: Session, sent_item: EmailQueue, actor: str) -> int:
+    cancellable_statuses = {
+        QueueStatus.DRAFT.value,
+        QueueStatus.PENDING_APPROVAL.value,
+        QueueStatus.APPROVED.value,
+    }
+    superseded_items = (
+        db.query(EmailQueue)
+        .filter(
+            EmailQueue.id != sent_item.id,
+            EmailQueue.candidate_id == sent_item.candidate_id,
+            EmailQueue.email_type == sent_item.email_type,
+            EmailQueue.status.in_(cancellable_statuses),
         )
+        .with_for_update()
+        .all()
     )
-    transition = SEND_STATUS_TRANSITIONS.get(item.email_type)
-    if transition:
-        item.candidate.stage = transition["stage"]
-        item.candidate.status = transition["status"]
-    log_action(db, SEND_EMAIL, "email_queue", item.id, actor, {"simulation": "sent"})
-    db.commit()
-    db.refresh(item)
-    return item
+    for superseded_item in superseded_items:
+        previous_status = superseded_item.status
+        superseded_item.status = QueueStatus.CANCELLED.value
+        log_action(
+            db,
+            AUTO_CANCEL_EMAIL,
+            "email_queue",
+            superseded_item.id,
+            actor,
+            {
+                "reason": "superseded_by_sent_email",
+                "sent_queue_id": sent_item.id,
+                "previous_status": previous_status,
+            },
+        )
+    return len(superseded_items)
 
 
 def _get_queue_item(db: Session, queue_id: int) -> EmailQueue:
@@ -157,14 +291,44 @@ def _get_queue_item(db: Session, queue_id: int) -> EmailQueue:
     return item
 
 
-def _supported_placeholders() -> set[str]:
-    return {"full_name", "candidate_name", "email", "phone", "position", "stage", "status", "interview_time", "interviewer", "note", "email_type"}
+def _require_queue_action(item: EmailQueue, action: QueueAction) -> None:
+    if not is_queue_action_allowed(item.status, action):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot {action.value} email with status {item.status}.",
+        )
 
 
-def _candidate_placeholder_value(candidate: Candidate, key: str) -> str | None:
-    if key == "candidate_name":
-        key = "full_name"
-    value = getattr(candidate, key, None)
-    if isinstance(value, datetime):
-        return value.isoformat()
-    return str(value) if value else None
+def _validate_queue_item(
+    db: Session,
+    item: EmailQueue,
+    subject: str | None = None,
+    body: str | None = None,
+) -> dict:
+    template = _get_email_template(db, item.email_type)
+    risk = build_risk_check(
+        db=db,
+        candidate=item.candidate,
+        template=template,
+        email_type=item.email_type,
+        rendered_subject=subject if subject is not None else item.subject,
+        rendered_body=body if body is not None else item.body,
+    )
+    if not risk["passed"]:
+        raise HTTPException(status_code=400, detail=risk)
+    merged_risk = retain_agent_review(risk, item.risk_check_result)
+    item.risk_check_result = merged_risk
+    return merged_risk
+
+
+def _get_email_template(db: Session, email_type: str) -> EmailTemplate | None:
+    return (
+        db.query(EmailTemplate)
+        .filter(EmailTemplate.email_type == email_type)
+        .first()
+    )
+
+
+def _raise_for_invalid_risk(risk: dict) -> None:
+    if not risk["passed"]:
+        raise HTTPException(status_code=400, detail=risk)

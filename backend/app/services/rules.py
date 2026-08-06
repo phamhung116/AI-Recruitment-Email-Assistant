@@ -1,4 +1,6 @@
-from app.models import CandidateStatus, EmailType
+from enum import Enum
+
+from app.models import CandidateStatus, EmailType, QueueStatus
 
 
 STATUS_EMAIL_RULES: dict[str, str | None] = {
@@ -17,12 +19,45 @@ SENSITIVE_EMAIL_TYPES = {
     EmailType.OFFER_EMAIL.value,
 }
 
-SEND_STATUS_TRANSITIONS: dict[str, dict[str, str]] = {
-    EmailType.INTERVIEW_INVITATION.value: {"stage": "INTERVIEW", "status": CandidateStatus.INTERVIEW_CONFIRMED.value},
-    EmailType.OFFER_EMAIL.value: {"stage": "OFFER", "status": CandidateStatus.PASS_INTERVIEW.value},
-    EmailType.ONBOARDING_EMAIL.value: {"stage": "ONBOARDING", "status": CandidateStatus.OFFER_ACCEPTED.value},
+class QueueAction(str, Enum):
+    EDIT = "edit"
+    REVIEW = "review"
+    APPROVE = "approve"
+    CANCEL = "cancel"
+    SIMULATE_SEND = "simulate_send"
+
+
+QUEUE_ACTION_ALLOWED_STATUSES: dict[QueueAction, set[str]] = {
+    QueueAction.EDIT: {
+        QueueStatus.DRAFT.value,
+        QueueStatus.PENDING_APPROVAL.value,
+        QueueStatus.APPROVED.value,
+    },
+    QueueAction.REVIEW: {
+        QueueStatus.DRAFT.value,
+        QueueStatus.PENDING_APPROVAL.value,
+        QueueStatus.APPROVED.value,
+    },
+    QueueAction.APPROVE: {
+        QueueStatus.DRAFT.value,
+        QueueStatus.PENDING_APPROVAL.value,
+    },
+    QueueAction.CANCEL: {
+        QueueStatus.DRAFT.value,
+        QueueStatus.PENDING_APPROVAL.value,
+        QueueStatus.APPROVED.value,
+        QueueStatus.FAILED.value,
+    },
+    QueueAction.SIMULATE_SEND: {
+        QueueStatus.DRAFT.value,
+        QueueStatus.APPROVED.value,
+    },
 }
 
 
 def email_type_for_status(status: str) -> str | None:
     return STATUS_EMAIL_RULES.get(status)
+
+
+def is_queue_action_allowed(status: str, action: QueueAction) -> bool:
+    return status in QUEUE_ACTION_ALLOWED_STATUSES[action]

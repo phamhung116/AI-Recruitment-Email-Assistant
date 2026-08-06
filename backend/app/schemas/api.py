@@ -115,7 +115,8 @@ class GenerateEmailDraftRequest(BaseModel):
 class EmailQueueUpdate(BaseModel):
     subject: str | None = None
     body: str | None = None
-    status: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class EmailQueueRead(BaseModel):

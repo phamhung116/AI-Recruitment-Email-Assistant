@@ -1,5 +1,8 @@
 AI_GENERATE_EMAIL = "ai_generate_email"
+AGENT_REVIEW_EMAIL = "agent_review_email"
+QUEUE_AGENT_REVIEW = "queue_agent_review"
 APPROVE_EMAIL = "approve_email"
 SEND_EMAIL = "send_email"
 CANCEL_EMAIL = "cancel_email"
+AUTO_CANCEL_EMAIL = "auto_cancel_email"
 UPDATE_CANDIDATE_STATUS = "update_candidate_status"
