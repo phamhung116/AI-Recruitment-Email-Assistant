@@ -6,6 +6,8 @@ from app.models.entities import (
     EmailQueue,
     EmailTemplate,
     EmailType,
+    OutboxEvent,
+    OutboxStatus,
     QueueStatus,
 )
 
@@ -17,5 +19,7 @@ __all__ = [
     "EmailQueue",
     "EmailTemplate",
     "EmailType",
+    "OutboxEvent",
+    "OutboxStatus",
     "QueueStatus",
 ]

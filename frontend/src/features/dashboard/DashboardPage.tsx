@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Inbox, MailCheck, Send, Users } from "lucide-react";
+import { AlertTriangle, FlaskConical, Inbox, MailCheck, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import {
     Bar,
@@ -91,14 +91,14 @@ export function DashboardPage() {
                             value={statsQuery.data?.pending_emails || 0}
                         />
                         <KPIStatCard
-                            description="Simulation sent successfully"
-                            icon={Send}
-                            label="Sent Emails"
+                            description="Recorded demo deliveries"
+                            icon={FlaskConical}
+                            label="Simulated Sends"
                             trend="+0.0%"
                             value={statsQuery.data?.sent_emails || 0}
                         />
                         <KPIStatCard
-                            description="Needs retry or investigation"
+                            description="Simulation needs investigation"
                             icon={AlertTriangle}
                             label="Failed Emails"
                             trend="Watch"

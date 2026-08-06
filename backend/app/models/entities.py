@@ -38,6 +38,12 @@ class QueueStatus(str, Enum):
     CANCELLED = "CANCELLED"
 
 
+class OutboxStatus(str, Enum):
+    PENDING = "PENDING"
+    PUBLISHED = "PUBLISHED"
+    FAILED = "FAILED"
+
+
 class Candidate(Base):
     __tablename__ = "candidates"
 
@@ -120,3 +126,18 @@ class AuditLog(Base):
     actor: Mapped[str | None] = mapped_column(String(255), default="demo_hr")
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class OutboxEvent(Base):
+    __tablename__ = "outbox_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    aggregate_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    aggregate_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default=OutboxStatus.PENDING.value, nullable=False, index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(String(500))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

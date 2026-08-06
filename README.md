@@ -1,174 +1,150 @@
-# AI Recruitment Email Assistant
+# Recruitment Mail Guard
 
-Trợ lý AI hỗ trợ quy trình gửi email tuyển dụng. MVP này tập trung vào workflow quản lý ứng viên, template email, generate draft bằng mock AI, queue approval và send simulation.
+Demo ứng dụng hỗ trợ HR tạo và kiểm tra email tuyển dụng với FastAPI, React,
+PostgreSQL, RabbitMQ, Redis và Gemini. Hệ thống chỉ mô phỏng gửi email; không có
+SMTP hoặc email provider thật.
 
-## Scope hiện tại
-
-- Không tích hợp Claude/OpenAI thật.
-- Không gửi email thật qua Gmail/Outlook/SendGrid.
-- Không build CV screening.
-- AI provider hiện tại là `MockAIEmailService`.
-- Email sending hiện tại là simulation trong backend.
-
-## Tech stack
-
-- Frontend: ReactJS + TypeScript + Vite
-- Backend: Python FastAPI
-- Database: PostgreSQL
-- ORM: SQLAlchemy
-- Excel import: openpyxl
-- Email/AI provider: mock services
-
-## Cấu trúc
+## Kiến trúc demo
 
 ```text
-backend/
-  app/
-    api/
-      candidateRoutes.py
-      dashboardRoutes.py
-      emailHistoryRoutes.py
-      emailQueueRoutes.py
-      emailTemplateRoutes.py
-      routes.py
-    constants/
-    core/config.py
-    db/database.py
-    db/seed.py
-    models/entities.py
-    schemas/api.py
-    services/ai_email.py
-    services/email_workflow.py
-    services/rules.py
-frontend/
-  src/
-    app/
-    components/
-    constants/
-    features/
-      auditLogs/
-      candidates/
-      dashboard/
-      emailHistory/
-      emailQueue/
-      emailTemplates/
-    lib/
-    services/recruitmentApi.ts
-    stores/
-    types/
-    utils/
-    main.tsx
-    styles.css
+React frontend
+    │ Save Draft (phản hồi ngay)
+    ▼
+FastAPI ── một PostgreSQL transaction ──► EmailQueue + OutboxEvent(PENDING)
+                                              │
+                                      Outbox Dispatcher
+                                              │ publish
+                                              ▼
+                                          RabbitMQ
+                                              │
+                                        Celery Worker
+                                      ┌───────┴────────┐
+                                      ▼                ▼
+                              Redis lock/progress   Gemini review
+                                      │                │
+                                      └───────┬────────┘
+                                              ▼
+                                  PostgreSQL review result
+                                              │ polling
+                                              ▼
+                                       React frontend
 ```
 
-## Coding standards đã áp dụng
+- PostgreSQL là nguồn dữ liệu chính và lưu draft, Outbox Event, review, history,
+  audit log.
+- RabbitMQ là broker duy nhất của review job.
+- Redis chỉ giữ lock chống xử lý trùng và progress có TTL; Redis không thay thế
+  PostgreSQL.
+- Worker kiểm tra lại `draft_version` và `content_hash` trước khi ghi kết quả.
+  Kết quả của draft cũ không thể ghi đè draft mới.
+- Nếu RabbitMQ, Redis hoặc Gemini không sẵn sàng, draft vẫn được lưu; UI hiển thị
+  trạng thái queued/unavailable và khóa Approve/Simulate Send.
 
-- Frontend dùng React + TypeScript, React Router, TanStack Query, Axios, Zustand, TailwindCSS, shadcn/ui-style source components, React Hook Form, Zod, Recharts và Lucide Icons.
-- Frontend không còn gộp nhiều page vào `main.tsx`; mỗi page/component/service/constant được tách file riêng theo feature.
-- Route-level lazy loading được bật để giảm initial bundle.
-- Design system dùng HiLab Technology official brand tokens: primary red `#fb2c36`, accent yellow `#fac800`, neutral gray palette, semantic status colors và dark-mode CSS variables.
-- Naming trong source dùng tiếng Anh; React component dùng PascalCase; biến/hàm JS dùng camelCase; shared constants dùng UPPER_CASE.
-- Backend được tách theo domain route và service để giảm method dài, giảm duplicate logic và tránh hard-code message/action.
-- API URL lấy từ `.env` qua `VITE_API_BASE_URL`; backend config lấy từ `.env`.
-- UI có loading/error/empty states cơ bản và button dùng `type="button"` để tránh submit ngoài ý muốn.
-- Các tiêu chí review lệch tech stack gốc như NestJS/Prisma/Tailwind/shadcn/Zustand được xem là N/A cho MVP FastAPI + ReactJS này.
+## Chức năng đã hoàn thành
 
-## Setup database
+- Save Draft nhanh, không gọi Gemini trong HTTP request.
+- Transactional Outbox trong cùng transaction với draft.
+- RabbitMQ dispatcher, Celery Agent Worker và Redis deduplication/progress.
+- Polling trạng thái Queued, Reviewing, Completed, Unavailable, Failed, Stale.
+- Update Status và Schedule Interview từ Candidate Quick Actions.
+- Chuẩn hóa datetime rỗng thành `null` và hiển thị FastAPI validation errors.
+- SENT read-only; tự cancel draft cũ cùng candidate và email type khi một item SENT.
+- Send simulation ghi EmailHistory và AuditLog nhưng không gửi email thật.
+- Automated backend, frontend và browser E2E tests.
 
-Tạo PostgreSQL database:
+## Yêu cầu
 
-```bash
-createdb ai_recruitment_email_assistant
+- Python 3.11+
+- Node.js 20+ và npm
+- Docker Desktop với Docker Compose
+
+## Cấu hình
+
+```powershell
+Copy-Item backend\.env.example backend\.env
+Copy-Item frontend\.env.example frontend\.env
 ```
 
-Hoặc dùng connection string khác trong `backend/.env`.
+Các biến backend chính:
 
-Nếu muốn chạy nhanh bằng Docker:
-
-```bash
-docker compose up -d postgres
+```text
+DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/ai_recruitment_email_assistant
+RABBITMQ_URL=amqp://guest:guest@localhost:5672//
+REDIS_URL=redis://localhost:6379/0
+GEMINI_AGENT_ENABLED=false
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
-## Run backend
+Chỉ đặt `GEMINI_AGENT_ENABLED=true` khi `GEMINI_API_KEY` đã được cấu hình ở
+backend. Không đưa key vào frontend hoặc commit `.env`.
 
-```bash
-cd backend
+## Chạy local
+
+Khởi động hạ tầng:
+
+```powershell
+docker compose up -d postgres rabbitmq redis
+docker compose ps
+```
+
+Chuẩn bị backend và seed dữ liệu demo:
+
+```powershell
+Set-Location backend
 python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-copy .env.example .env
-python -m app.db.seed
-uvicorn app.main:app --reload
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe -m app.db.seed
 ```
 
-API chạy tại `http://localhost:8000`.
+Mở bốn terminal từ thư mục `backend`:
 
-FastAPI docs: `http://localhost:8000/docs`.
+```powershell
+# Terminal 1: API
+.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 
-Ghi chú: MVP đang dùng `Base.metadata.create_all()` khi startup để dễ demo local. Khi production hóa, nên thay bằng Alembic migration đầy đủ.
+# Terminal 2: Outbox Dispatcher
+.venv\Scripts\python.exe -m scripts.run_outbox_dispatcher
 
-## Run frontend
+# Terminal 3: Agent Worker (Windows/demo)
+.venv\Scripts\python.exe -m celery -A app.messaging.celery_app:celery_app worker --pool=solo --loglevel=INFO --queues=email_review
+```
 
-```bash
-cd frontend
+Mở frontend:
+
+```powershell
+Set-Location frontend
 npm install
-copy .env.example .env
 npm run dev
 ```
 
-Frontend chạy tại `http://localhost:5173`.
+- Frontend: `http://localhost:5173`
+- FastAPI docs: `http://localhost:8000/docs`
+- RabbitMQ management: `http://localhost:15672` (`guest` / `guest`, local demo only)
 
-Trên Windows PowerShell, nếu `npm` bị chặn bởi execution policy, dùng `npm.cmd install` và `npm.cmd run dev`.
+## Kiểm thử
 
-Build production frontend:
+```powershell
+# Backend
+Set-Location backend
+.venv\Scripts\python.exe -m unittest discover -s tests -v
+.venv\Scripts\python.exe -m scripts.smoke_test_async_pipeline
 
-```bash
+# Manual Gemini thật — chỉ dùng synthetic data
+.venv\Scripts\python.exe -m scripts.smoke_test_gemini_pipeline
+
+# Frontend
+Set-Location ..\frontend
+npm test
 npm run build
+npm run test:e2e
 ```
 
-## Excel import
+`npm run test:e2e` dùng SQLite trong `backend/.e2e`, tắt Gemini, nhưng vẫn chạy
+dispatcher/worker thật qua RabbitMQ và Redis. PostgreSQL demo không bị sửa.
 
-File `.xlsx` nên có header:
+## API chính
 
-```text
-full_name, email, phone, position, stage, status, interview_time, interviewer, note
-```
-
-`interview_time` có thể là datetime cell trong Excel hoặc ISO string.
-
-File mẫu để test upload đã có tại:
-
-```text
-sampleData/candidates_import_sample.xlsx
-```
-
-Backend sẽ tự skip candidate có email trùng để tránh import lặp dữ liệu khi test nhiều lần.
-
-## Workflow demo
-
-1. Seed database bằng `python -m app.db.seed`.
-2. Mở Candidates, chọn một candidate có status như `PASS_CV`, `REJECT_CV`, `INTERVIEW_CONFIRMED`.
-3. Bấm Generate Draft.
-4. Mở Email Queue để preview/edit.
-5. Nếu email sensitive như rejection hoặc offer, approve trước.
-6. Bấm Send để simulation tạo `email_history` và cập nhật queue status.
-
-Nếu candidate status là `PENDING`, backend sẽ block generate email với message:
-
-```text
-Candidate status is pending. Please update status before generating email.
-```
-
-## REST API
-
-- `POST /candidates/import`
-- `GET /candidates`
-- `GET /candidates/{id}`
-- `PATCH /candidates/{id}`
-- `GET /email-templates`
-- `POST /email-templates`
-- `PATCH /email-templates/{id}`
-- `DELETE /email-templates/{id}`
 - `POST /email-drafts/generate`
 - `GET /email-queue`
 - `GET /email-queue/{id}`
@@ -176,12 +152,17 @@ Candidate status is pending. Please update status before generating email.
 - `POST /email-queue/{id}/approve`
 - `POST /email-queue/{id}/send`
 - `POST /email-queue/{id}/cancel`
+- `POST /api/v1/agent/review-draft` — endpoint review thủ công/diagnostic
 - `GET /email-history`
 - `GET /audit-logs`
 
-## Future integration points
+## Giới hạn hiện tại
 
-- Claude/OpenAI: implement class mới theo interface `AIEmailService` trong `backend/app/services/ai_email.py`.
-- Gmail/Microsoft Graph/SendGrid: thay logic simulation trong `send_email()` bằng email provider service riêng.
-- Alembic: thêm migration để quản lý schema thay cho `create_all`.
-- Auth/RBAC: thay actor mặc định `demo_hr` bằng user thật từ auth context.
+- Schema dùng `Base.metadata.create_all()`; chưa có Alembic migration.
+- Chưa có authentication/RBAC hoặc tenant isolation.
+- Chưa có resend workflow hoàn chỉnh.
+- Chưa có dead-letter dashboard, cluster hoặc production monitoring.
+- Validation/review metadata vẫn nằm trong JSON thay vì bảng chuẩn hóa riêng.
+- Không gửi email thật.
+
+Xem [docs/demo-runbook.md](docs/demo-runbook.md) để chạy và thuyết trình demo.

@@ -7,6 +7,10 @@ __pycache__/
 node_modules/
 dist/
 .tmp/
+coverage/
+playwright-report/
+test-results/
+backend/.e2e/
 
 .tmp_docx_extract/
 .tmp_coding_standards.zip
