@@ -20,7 +20,11 @@ class Settings(BaseSettings):
     outbox_batch_size: int = Field(default=50, ge=1, le=500)
     outbox_poll_interval_seconds: float = Field(default=1.0, ge=0.1, le=60.0)
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     @property
     def cors_origins(self) -> list[str]:

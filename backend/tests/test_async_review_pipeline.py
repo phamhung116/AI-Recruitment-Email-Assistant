@@ -182,7 +182,11 @@ class AsyncReviewPipelineTest(unittest.TestCase):
         def save_new_version() -> None:
             db = self.SessionLocal()
             try:
-                update_email_draft(db, draft.id, subject="Newer subject wins")
+                update_email_draft(
+                    db,
+                    draft.id,
+                    subject="Newer subject wins for Backend Engineer",
+                )
             finally:
                 db.close()
 
@@ -201,7 +205,7 @@ class AsyncReviewPipelineTest(unittest.TestCase):
         db = self.SessionLocal()
         try:
             current = db.get(EmailQueue, draft.id)
-            self.assertEqual(current.subject, "Newer subject wins")
+            self.assertEqual(current.subject, "Newer subject wins for Backend Engineer")
             self.assertEqual(current.risk_check_result["draft_version"], 2)
             self.assertEqual(current.risk_check_result["async_review"]["status"], "QUEUED")
             self.assertNotIn("agent_review", current.risk_check_result)

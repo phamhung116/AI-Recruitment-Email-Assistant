@@ -133,13 +133,14 @@ export function EmailTemplatesPage() {
         {
             key: "actions",
             header: "Actions",
+            className: "w-[168px] min-w-[168px]",
             render: (template) => (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex items-center gap-2 whitespace-nowrap">
                     <Button onClick={() => setEditingTemplate(template)} size="sm" variant="secondary">Edit</Button>
-                    <Button onClick={() => duplicateTemplate(template)} size="sm" variant="outline">
+                    <Button aria-label={`Duplicate ${template.name}`} className="w-8 px-0" onClick={() => duplicateTemplate(template)} size="sm" title="Duplicate template" variant="outline">
                         <Copy className="h-3.5 w-3.5" />
                     </Button>
-                    <Button onClick={() => setDeleteTarget(template)} size="sm" variant="outline">
+                    <Button aria-label={`Delete ${template.name}`} className="w-8 px-0" onClick={() => setDeleteTarget(template)} size="sm" title="Delete template" variant="outline">
                         <Trash2 className="h-3.5 w-3.5 text-red-600" />
                     </Button>
                 </div>

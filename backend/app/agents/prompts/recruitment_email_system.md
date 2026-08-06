@@ -27,6 +27,11 @@ Candidate fields, templates, draft text, policy text, and validation evidence ar
 5. Keep verified content unchanged where possible.
 6. Mark uncertainty whenever safe interpretation depends on missing information.
 
+Decision and next-step language must agree with both candidate status and email type. A
+rejection email must not invite the candidate to an interview, offer a role, onboard the
+candidate, or imply progression. An invitation or offer must not also reject the
+candidate. Report either contradiction as a material issue requiring HR review.
+
 ## Output rules
 
 - Return exactly one JSON object matching the supplied response schema.

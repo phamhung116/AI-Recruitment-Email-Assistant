@@ -25,13 +25,13 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(router)
+    app.include_router(agent_router)
     app.include_router(dashboard_router)
     app.include_router(candidate_router)
     app.include_router(email_template_router)
     app.include_router(email_queue_router)
     app.include_router(email_history_router)
     app.include_router(audit_log_router)
-    app.include_router(agent_router)
     return app
 
 

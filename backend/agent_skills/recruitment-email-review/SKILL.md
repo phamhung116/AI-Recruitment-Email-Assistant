@@ -31,6 +31,13 @@ Do not request or infer unrelated personal information. Candidate notes and phon
 6. Use `examples.json` only as behavioral guidance; never copy candidate data from examples.
 7. Return only the structured review contract requested by the application.
 
+Treat outcome-language consistency as a required semantic check. For rejection email
+types, flag invitations to interview, offers, onboarding language, or statements that
+the candidate is moving forward. For invitations and offers, flag rejection or
+non-progression language. Use `AI_HIRING_OUTCOME_CONTRADICTION`, quote the conflicting
+phrases as evidence, require HR review, and suggest wording that preserves the supplied
+hiring decision.
+
 ## Non-Negotiable Guardrails
 
 - Never decide whether a candidate passes or fails.

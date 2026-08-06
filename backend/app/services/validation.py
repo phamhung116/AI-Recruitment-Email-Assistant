@@ -11,6 +11,11 @@ from app.services.rules import SENSITIVE_EMAIL_TYPES, STATUS_EMAIL_RULES, email_
 
 PLACEHOLDER_RE = re.compile(r"{{\s*([a-zA-Z0-9_]+)\s*}}")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+GREETING_NAME_RE = re.compile(
+    r"^\s*(?:dear|hello|hi|xin\s+chào|chào)\s+([^,\n:!]+)",
+    re.IGNORECASE,
+)
+NAME_PLACEHOLDERS = {"candidate_name", "full_name"}
 SUPPORTED_PLACEHOLDERS = {
     "candidate_name",
     "email",
@@ -38,7 +43,7 @@ def validate_email_draft(
     _validate_candidate(candidate, issues)
     _validate_status_mapping(candidate, email_type, issues)
     _validate_template(candidate, template, email_type, issues)
-    _validate_rendered_draft(rendered_subject, rendered_body, issues)
+    _validate_rendered_draft(candidate, template, rendered_subject, rendered_body, issues)
     _validate_duplicate_history(db, candidate, email_type, issues)
     _add_approval_requirement(template, email_type, issues)
     return ValidationResult.from_issues(issues)
@@ -186,6 +191,8 @@ def _validate_template(
 
 
 def _validate_rendered_draft(
+    candidate: Candidate,
+    template: EmailTemplate | None,
     rendered_subject: str | None,
     rendered_body: str | None,
     issues: list[ValidationIssue],
@@ -223,6 +230,66 @@ def _validate_rendered_draft(
                 "Rendered draft still contains unresolved placeholders.",
                 {"unresolved_placeholders": unresolved},
                 "Fix the template syntax or provide the verified required data.",
+            )
+        )
+
+    if template is None:
+        return
+
+    rendered_content = _normalize_content(f"{rendered_subject}\n{rendered_body}")
+    missing_content = [
+        key
+        for key in template.required_placeholders
+        if (expected_value := _rendered_placeholder_value(candidate, key))
+        and _normalize_content(expected_value) not in rendered_content
+    ]
+    required_name_keys = [
+        key
+        for key in template.required_placeholders
+        if key in NAME_PLACEHOLDERS and candidate_placeholder_value(candidate, key)
+    ]
+    detected_name = _extract_greeting_name(rendered_body) if required_name_keys else None
+    expected_name = (candidate.full_name or "").strip()
+    has_name_mismatch = bool(
+        detected_name
+        and expected_name
+        and not _greeting_name_matches_candidate(detected_name, expected_name)
+    )
+    if detected_name and has_name_mismatch:
+        issues.append(
+            _issue(
+                "CANDIDATE_NAME_MISMATCH",
+                IssueSeverity.ERROR,
+                (
+                    "The candidate name in the draft does not match the selected candidate. "
+                    f"Expected '{expected_name}', but the greeting contains '{detected_name}'."
+                ),
+                {
+                    "expected_candidate_name": expected_name,
+                    "detected_candidate_name": detected_name,
+                    "location": "body_greeting",
+                    "placeholders": required_name_keys,
+                },
+                f"Replace '{detected_name}' with '{expected_name}', then save the draft again.",
+            )
+        )
+
+    missing_without_mismatched_name = [
+        key
+        for key in missing_content
+        if key not in NAME_PLACEHOLDERS or not has_name_mismatch
+    ]
+    if missing_without_mismatched_name:
+        issues.append(
+            _issue(
+                "REQUIRED_CONTENT_MISSING",
+                IssueSeverity.ERROR,
+                (
+                    "The draft is missing required candidate information: "
+                    f"{_placeholder_labels(missing_without_mismatched_name)}."
+                ),
+                {"missing_placeholders": missing_without_mismatched_name},
+                "Add the verified candidate information to the subject or body, then save again.",
             )
         )
 
@@ -283,6 +350,49 @@ def candidate_placeholder_value(candidate: Candidate, key: str) -> str | None:
     if isinstance(value, str):
         value = value.strip()
     return str(value) if value else None
+
+
+def _rendered_placeholder_value(candidate: Candidate, key: str) -> str | None:
+    value = candidate_placeholder_value(candidate, key)
+    if value is None:
+        return None
+    if key == "interview_time" and isinstance(candidate.interview_time, datetime):
+        return candidate.interview_time.strftime("%Y-%m-%d %H:%M")
+    return value
+
+
+def _normalize_content(value: str) -> str:
+    return " ".join(value.casefold().split())
+
+
+def _extract_greeting_name(body: str) -> str | None:
+    first_content_line = next((line for line in body.splitlines() if line.strip()), "")
+    match = GREETING_NAME_RE.match(first_content_line)
+    if match is None:
+        return None
+    detected_name = match.group(1).strip()
+    return detected_name or None
+
+
+def _greeting_name_matches_candidate(detected_name: str, expected_name: str) -> bool:
+    normalized_detected = _normalize_content(detected_name)
+    normalized_expected = _normalize_content(expected_name)
+    return (
+        normalized_detected == normalized_expected
+        or normalized_detected.endswith(f" {normalized_expected}")
+    )
+
+
+def _placeholder_labels(placeholders: list[str]) -> str:
+    labels = {
+        "candidate_name": "candidate name",
+        "full_name": "candidate name",
+        "interview_time": "interview time",
+    }
+    return ", ".join(
+        labels.get(placeholder, placeholder.replace("_", " "))
+        for placeholder in placeholders
+    )
 
 
 def _issue(

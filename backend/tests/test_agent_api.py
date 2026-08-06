@@ -110,6 +110,140 @@ class AgentReviewApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
 
+    def test_saving_draft_rechecks_required_candidate_content(self) -> None:
+        db = self.SessionLocal()
+        try:
+            candidate = Candidate(
+                full_name="Tran Bao Chau",
+                email="chau@example.com",
+                position="Backend Developer",
+                stage="CV_SCREENING",
+                status=CandidateStatus.REJECT_CV.value,
+            )
+            template = EmailTemplate(
+                name="CV rejection",
+                email_type=EmailType.REJECTION_AFTER_CV.value,
+                subject="Update on your application for {{position}}",
+                body="Hi {{candidate_name}}, thank you for your interest in {{position}}.",
+                required_placeholders=["candidate_name", "position"],
+                is_sensitive=True,
+            )
+            db.add_all([candidate, template])
+            db.commit()
+            queue_id = generate_email_draft(db, candidate.id, None, "creator").id
+        finally:
+            db.close()
+
+        response = self.client.patch(
+            f"/email-queue/{queue_id}",
+            json={
+                "subject": "Update on your application for Backend Developer",
+                "body": "Hi\n\nThank you for your interest in Backend Developer.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400, response.text)
+        result = response.json()["detail"]
+        self.assertFalse(result["passed"])
+        self.assertIn(
+            "REQUIRED_CONTENT_MISSING",
+            [issue["rule_id"] for issue in result["issues"]],
+        )
+
+    def test_saving_draft_reports_candidate_name_mismatch_with_context(self) -> None:
+        db = self.SessionLocal()
+        try:
+            candidate = Candidate(
+                full_name="Tran Bao Chau",
+                email="chau@example.com",
+                position="Backend Developer",
+                stage="CV_SCREENING",
+                status=CandidateStatus.REJECT_CV.value,
+            )
+            template = EmailTemplate(
+                name="CV rejection",
+                email_type=EmailType.REJECTION_AFTER_CV.value,
+                subject="Update on your application for {{position}}",
+                body="Hi {{candidate_name}}, thank you for your interest in {{position}}.",
+                required_placeholders=["candidate_name", "position"],
+                is_sensitive=True,
+            )
+            db.add_all([candidate, template])
+            db.commit()
+            queue_id = generate_email_draft(db, candidate.id, None, "creator").id
+        finally:
+            db.close()
+
+        response = self.client.patch(
+            f"/email-queue/{queue_id}",
+            json={
+                "subject": "Update on your application for Backend Developer",
+                "body": "Hi Ha Bao Chau,\n\nThank you for your interest in Backend Developer.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400, response.text)
+        result = response.json()["detail"]
+        issues = result["issues"]
+        mismatch = next(issue for issue in issues if issue["rule_id"] == "CANDIDATE_NAME_MISMATCH")
+        self.assertEqual(mismatch["evidence"]["expected_candidate_name"], "Tran Bao Chau")
+        self.assertEqual(mismatch["evidence"]["detected_candidate_name"], "Ha Bao Chau")
+        self.assertIn("Expected 'Tran Bao Chau'", mismatch["message"])
+        self.assertNotIn("candidate_name", [
+            placeholder
+            for issue in issues
+            if issue["rule_id"] == "REQUIRED_CONTENT_MISSING"
+            for placeholder in issue["evidence"]["missing_placeholders"]
+        ])
+
+    def test_semantically_changed_draft_requires_fresh_agent_review_before_approval(self) -> None:
+        db = self.SessionLocal()
+        try:
+            candidate = Candidate(
+                full_name="Tran Bao Chau",
+                email="chau@example.com",
+                position="Backend Developer",
+                stage="CV_SCREENING",
+                status=CandidateStatus.REJECT_CV.value,
+            )
+            template = EmailTemplate(
+                name="CV rejection",
+                email_type=EmailType.REJECTION_AFTER_CV.value,
+                subject="Update on your application for {{position}}",
+                body="Hi {{candidate_name}}, thank you for your interest in {{position}}.",
+                required_placeholders=["candidate_name", "position"],
+                is_sensitive=True,
+            )
+            db.add_all([candidate, template])
+            db.commit()
+            queue_id = generate_email_draft(db, candidate.id, None, "creator").id
+        finally:
+            db.close()
+
+        save_response = self.client.patch(
+            f"/email-queue/{queue_id}",
+            json={
+                "subject": "Update on your application for Backend Developer",
+                "body": (
+                    "Hi Tran Bao Chau,\n\n"
+                    "Thank you for applying for Backend Developer. "
+                    "We are pleased to invite you to the next interview. "
+                    "Unfortunately, we will not move forward with your application."
+                ),
+            },
+        )
+        self.assertEqual(save_response.status_code, 200, save_response.text)
+        self.assertTrue(save_response.json()["risk_check_result"]["passed"])
+        self.assertEqual(
+            save_response.json()["risk_check_result"]["async_review"]["status"],
+            "QUEUED",
+        )
+        self.assertNotIn("agent_review", save_response.json()["risk_check_result"])
+
+        premature_approval = self.client.post(f"/email-queue/{queue_id}/approve")
+        self.assertEqual(premature_approval.status_code, 400)
+        self.assertIn("Wait for AI review", premature_approval.json()["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()

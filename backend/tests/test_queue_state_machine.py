@@ -82,6 +82,7 @@ class QueueStateMachineTest(unittest.TestCase):
         draft = generate_email_draft(self.db, candidate.id, None, "creator")
         self.assertEqual(draft.status, QueueStatus.PENDING_APPROVAL.value)
 
+        self._mark_review_completed(draft)
         approved = approve_email(self.db, draft.id, "reviewer")
         self.assertEqual(approved.status, QueueStatus.APPROVED.value)
         self.assertEqual(approved.approved_by, "reviewer")
@@ -124,6 +125,7 @@ class QueueStateMachineTest(unittest.TestCase):
         original_stage = candidate.stage
         original_status = candidate.status
         draft = generate_email_draft(self.db, candidate.id, None, "creator")
+        self._mark_review_completed(draft)
         approve_email(self.db, draft.id, "reviewer")
 
         sent = send_email(self.db, draft.id, "sender")
@@ -138,6 +140,7 @@ class QueueStateMachineTest(unittest.TestCase):
     def test_terminal_sent_state_rejects_all_queue_actions(self) -> None:
         candidate, _ = self._create_interview_fixture()
         draft = generate_email_draft(self.db, candidate.id, None, "creator")
+        self._mark_review_completed(draft)
         send_email(self.db, draft.id)
 
         actions = (
@@ -156,8 +159,10 @@ class QueueStateMachineTest(unittest.TestCase):
         candidate, _ = self._create_interview_fixture()
         old_draft = generate_email_draft(self.db, candidate.id, None, "creator")
         old_approved = generate_email_draft(self.db, candidate.id, None, "creator")
+        self._mark_review_completed(old_approved)
         approve_email(self.db, old_approved.id, "reviewer")
         draft_to_send = generate_email_draft(self.db, candidate.id, None, "creator")
+        self._mark_review_completed(draft_to_send)
 
         unrelated_type = EmailQueue(
             candidate_id=candidate.id,
@@ -207,6 +212,7 @@ class QueueStateMachineTest(unittest.TestCase):
     def test_invalid_edit_keeps_previous_content_and_approval(self) -> None:
         candidate, _ = self._create_rejection_fixture()
         draft = generate_email_draft(self.db, candidate.id, None, "creator")
+        self._mark_review_completed(draft)
         approve_email(self.db, draft.id, "reviewer")
         original_subject = draft.subject
         original_body = draft.body
@@ -225,6 +231,7 @@ class QueueStateMachineTest(unittest.TestCase):
         draft = generate_email_draft(self.db, candidate.id, None, "creator")
 
         self.assertEqual(draft.status, QueueStatus.DRAFT.value)
+        self._mark_review_completed(draft)
         sent = send_email(self.db, draft.id)
         self.assertEqual(sent.status, QueueStatus.SENT.value)
 
@@ -249,7 +256,11 @@ class QueueStateMachineTest(unittest.TestCase):
         draft = generate_email_draft(self.db, candidate.id, None, "creator")
         original_hash = draft.risk_check_result["content_hash"]
 
-        updated = update_email_draft(self.db, draft.id, subject="Updated interview subject")
+        updated = update_email_draft(
+            self.db,
+            draft.id,
+            subject="Updated interview subject for Backend Engineer",
+        )
 
         self.assertEqual(updated.risk_check_result["draft_version"], 2)
         self.assertNotEqual(updated.risk_check_result["content_hash"], original_hash)
@@ -272,7 +283,11 @@ class QueueStateMachineTest(unittest.TestCase):
             side_effect=RuntimeError("outbox insert failed"),
         ):
             with self.assertRaisesRegex(RuntimeError, "outbox insert failed"):
-                update_email_draft(self.db, draft.id, subject="Must roll back")
+                update_email_draft(
+                    self.db,
+                    draft.id,
+                    subject="Must roll back for Backend Engineer",
+                )
 
         self.db.refresh(draft)
         self.assertEqual(draft.subject, original_subject)
@@ -362,6 +377,19 @@ class QueueStateMachineTest(unittest.TestCase):
             body="Hello {{candidate_name}}, meet {{interviewer}} at {{interview_time}}.",
             required_placeholders=["candidate_name", "position", "interviewer", "interview_time"],
         )
+
+    def _mark_review_completed(self, draft: EmailQueue) -> None:
+        risk = dict(draft.risk_check_result)
+        metadata = dict(risk["async_review"])
+        metadata.update(
+            {
+                "status": "COMPLETED",
+                "review_version": risk["draft_version"],
+            }
+        )
+        risk["async_review"] = metadata
+        draft.risk_check_result = risk
+        self.db.commit()
 
     def _create_fixture(
         self,

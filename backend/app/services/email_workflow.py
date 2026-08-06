@@ -183,6 +183,7 @@ def approve_email(db: Session, queue_id: int, actor: str = "demo_hr") -> EmailQu
     item = _get_queue_item(db, queue_id)
     _require_queue_action(item, QueueAction.APPROVE)
     _validate_queue_item(db, item)
+    _require_current_review(item)
     item.status = QueueStatus.APPROVED.value
     item.approved_by = actor
     log_action(db, APPROVE_EMAIL, "email_queue", item.id, actor)
@@ -211,6 +212,7 @@ def send_email(db: Session, queue_id: int, actor: str = "demo_hr") -> EmailQueue
             raise HTTPException(status_code=400, detail=EMAIL_REQUIRES_APPROVAL_MESSAGE)
         _require_queue_action(item, QueueAction.SIMULATE_SEND)
         _validate_queue_item(db, item)
+        _require_current_review(item)
         if "mock_fail" in item.to_email:
             item.status = QueueStatus.FAILED.value
             log_action(db, SEND_EMAIL, "email_queue", item.id, actor, {"simulation": "failed"})
@@ -327,6 +329,35 @@ def _get_email_template(db: Session, email_type: str) -> EmailTemplate | None:
         .filter(EmailTemplate.email_type == email_type)
         .first()
     )
+
+
+def _require_current_review(item: EmailQueue) -> None:
+    risk_result = item.risk_check_result or {}
+    metadata = risk_result.get("async_review")
+    draft_version = risk_result.get("draft_version")
+    content_hash = risk_result.get("content_hash")
+    if not isinstance(metadata, dict):
+        raise HTTPException(
+            status_code=400,
+            detail="Run AI review for the current draft version before continuing.",
+        )
+
+    is_current = (
+        metadata.get("status") == "COMPLETED"
+        and isinstance(draft_version, int)
+        and metadata.get("draft_version") == draft_version
+        and metadata.get("review_version") == draft_version
+        and (
+            not content_hash
+            or not metadata.get("content_hash")
+            or metadata.get("content_hash") == content_hash
+        )
+    )
+    if not is_current:
+        raise HTTPException(
+            status_code=400,
+            detail="Wait for AI review of the current draft version before continuing.",
+        )
 
 
 def _raise_for_invalid_risk(risk: dict) -> None:
