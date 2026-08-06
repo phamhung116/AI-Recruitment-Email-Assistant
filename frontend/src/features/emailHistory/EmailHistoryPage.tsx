@@ -48,13 +48,13 @@ export function EmailHistoryPage() {
         },
         {
             key: "sentBy",
-            header: "Sent By",
+            header: "Recorded By",
             sortable: true,
             render: (item) => item.sent_by || "System",
         },
         {
             key: "sentAt",
-            header: "Sent At",
+            header: "Simulated At",
             sortable: true,
             render: (item) => formatRelativeDateTime(item.sent_at),
         },
@@ -78,7 +78,7 @@ export function EmailHistoryPage() {
                 <DataTable
                     columns={columns}
                     data={filteredItems}
-                    emptyState={<EmptyState description="Sent emails will appear here after queue simulation succeeds." icon={History} title="No sent emails yet" />}
+                    emptyState={<EmptyState description="Simulation records will appear here after a queue simulation succeeds." icon={History} title="No simulated sends yet" />}
                     onSortChange={(key, order) => {
                         setSortBy(key);
                         setSortOrder(order);
