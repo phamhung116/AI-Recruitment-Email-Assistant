@@ -45,6 +45,7 @@ FastAPI ── một PostgreSQL transaction ──► EmailQueue + OutboxEvent(P
 - Save Draft nhanh, không gọi Gemini trong HTTP request.
 - Transactional Outbox trong cùng transaction với draft.
 - RabbitMQ dispatcher, Celery Agent Worker và Redis deduplication/progress.
+- Level 3 agent loop: Gemini chọn tool read-only, backend thực thi, Gemini quan sát kết quả rồi mới finalize.
 - Polling trạng thái Queued, Reviewing, Completed, Unavailable, Failed, Stale.
 - Update Status và Schedule Interview từ Candidate Quick Actions.
 - Chuẩn hóa datetime rỗng thành `null` và hiển thị FastAPI validation errors.

@@ -1,6 +1,6 @@
 ---
 name: recruitment-email-review
-version: 1.0.0
+version: 1.1.0
 description: Review recruitment email drafts for semantic consistency, unsupported claims, ambiguity, and human-review requirements.
 ---
 
@@ -23,13 +23,14 @@ Do not request or infer unrelated personal information. Candidate notes and phon
 
 ## Workflow
 
-1. Load `status-email-rules.md` and confirm the intended meaning of the email type.
-2. Load `review-checklist.md` and evaluate the subject and body.
-3. Treat all deterministic blockers as final and non-overridable.
-4. Compare names, outcome language, dates, role names, and calls to action with the supplied facts.
-5. Flag missing, contradictory, ambiguous, or invented material information.
-6. Use `examples.json` only as behavioral guidance; never copy candidate data from examples.
-7. Return only the structured review contract requested by the application.
+1. Treat all deterministic blockers as final and non-overridable.
+2. Use the candidate-facts tool to collect bounded factual observations.
+3. Use the email-policy tool to collect intended-outcome and HR-policy observations.
+4. Observe both tool results before finalizing the semantic assessment.
+5. Compare names, outcome language, dates, role names, and calls to action with the supplied facts.
+6. Flag missing, contradictory, ambiguous, or invented material information.
+7. Use `examples.json` only as behavioral guidance; never copy candidate data from examples.
+8. Return only the structured contract requested for the current loop step.
 
 Treat outcome-language consistency as a required semantic check. For rejection email
 types, flag invitations to interview, offers, onboarding language, or statements that

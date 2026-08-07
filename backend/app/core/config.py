@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     gemini_agent_enabled: bool = False
     gemini_timeout_seconds: float = Field(default=20.0, ge=1.0, le=120.0)
     gemini_max_retries: int = Field(default=1, ge=0, le=5)
-    gemini_agent_max_steps: int = Field(default=2, ge=1, le=3)
+    gemini_agent_max_steps: int = Field(default=3, ge=1, le=5)
     rabbitmq_url: str = "amqp://guest:guest@localhost:5672//"
     redis_url: str = "redis://localhost:6379/0"
     review_lock_ttl_seconds: int = Field(default=120, ge=30, le=3600)
@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     @property
     def gemini_is_configured(self) -> bool:
         return self.gemini_agent_enabled and self.gemini_api_key_value is not None
+
+    @property
+    def gemini_effective_agent_steps(self) -> int:
+        """Level 3 needs two observations and one final decision."""
+        return max(3, self.gemini_agent_max_steps)
 
 
 @lru_cache

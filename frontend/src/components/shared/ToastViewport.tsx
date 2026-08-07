@@ -28,7 +28,7 @@ export function ToastViewport() {
     }
 
     return (
-        <div className={cn("fixed right-5 top-5 z-50 w-[min(380px,calc(100vw-2rem))] rounded-lg border p-4 text-sm shadow-lg", TOAST_CLASS_MAP[toast.variant])}>
+        <div className={cn("fixed right-5 top-5 z-[100] w-[min(380px,calc(100vw-2rem))] rounded-lg border p-4 text-sm shadow-lg", TOAST_CLASS_MAP[toast.variant])}>
             {toast.message}
         </div>
     );

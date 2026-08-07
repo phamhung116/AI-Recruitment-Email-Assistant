@@ -23,12 +23,23 @@ function completedReview(overrides: Partial<AgentReviewResult> = {}): AgentRevie
         model_metadata: {
             provider: "gemini",
             model: "gemini-2.5-flash",
-            prompt_version: "semantic_review.v1",
+            prompt_version: "semantic_review.v2",
             skill_name: "recruitment-email-review",
-            skill_version: "1.0.0",
-            attempts: 1,
+            skill_version: "1.1.0",
+            attempts: 3,
+            loop_steps: 3,
+            tool_calls: 2,
         },
-        trace: [],
+        trace: [
+            { step: "decide", status: "completed", detail: "Agent selected candidate facts check." },
+            { step: "act", status: "completed", detail: "Backend executed the allowlisted candidate facts check tool." },
+            { step: "observe", status: "completed", detail: "Agent received four findings." },
+            { step: "decide", status: "completed", detail: "Agent selected email policy check." },
+            { step: "act", status: "completed", detail: "Backend executed the allowlisted email policy check tool." },
+            { step: "observe", status: "completed", detail: "Agent received three findings." },
+            { step: "decide", status: "completed", detail: "Agent selected final assessment." },
+            { step: "finalize", status: "completed", detail: "Agent synthesized the final assessment." },
+        ],
         ...overrides,
     };
 }
@@ -54,9 +65,12 @@ describe("EmailReviewPanel", () => {
         );
 
         expect(screen.getByRole("heading", { name: "Ready for the next step" })).toBeInTheDocument();
-        expect(screen.getByText("Completed")).toBeInTheDocument();
+        expect(screen.getAllByText("Completed").length).toBeGreaterThan(0);
         expect(screen.getByText("Not required")).toBeInTheDocument();
         expect(screen.getByText("The draft is consistent with the supplied candidate facts.")).toBeInTheDocument();
+        expect(screen.getByText("Agent review journey")).toBeInTheDocument();
+        expect(screen.getAllByText("Backend ran a safe tool")).toHaveLength(2);
+        expect(screen.getByText(/2 safe tools/)).toBeInTheDocument();
     });
 
     it("keeps a deterministic blocker final and displays remediation", () => {

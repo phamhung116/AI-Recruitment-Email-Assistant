@@ -182,6 +182,8 @@ def agent_review_audit_metadata(review: AgentReviewResult) -> dict:
         "prompt_version": review.model_metadata.prompt_version,
         "skill_version": review.model_metadata.skill_version,
         "attempts": review.model_metadata.attempts,
+        "loop_steps": review.model_metadata.loop_steps,
+        "tool_calls": review.model_metadata.tool_calls,
         "issue_count": len(review.issues),
         "requires_human_review": review.requires_human_review,
     }

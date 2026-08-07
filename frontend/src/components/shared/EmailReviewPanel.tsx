@@ -57,6 +57,7 @@ export function EmailReviewPanel({
     const agentReview = riskResult.agent_review;
     const asyncReviewStatus = getAsyncReviewStatus(riskResult);
     const asyncReview = getAsyncReviewMetadata(riskResult);
+    const agentJourney = agentReview?.trace.filter((step) => ["act", "decide", "finalize", "loop_limit", "observe"].includes(step.step)) || [];
     const hasBlockingIssue = riskResult.passed === false || deterministicIssues.some((issue) => issue.is_blocking);
     const requiresHumanReview = Boolean(riskResult.requires_human_review || agentReview?.requires_human_review);
     const status = getOverallStatus(hasBlockingIssue, requiresHumanReview, agentReview, asyncReviewStatus, isStale);
@@ -144,6 +145,22 @@ export function EmailReviewPanel({
                     </ReviewSection>
                 )}
 
+                {agentJourney.length > 0 && (
+                    <ReviewSection title="Agent review journey" subtitle="The agent chose read-only checks, observed their results, then produced its assessment.">
+                        <ol className="relative ml-2 space-y-0 border-l border-slate-200" aria-label="Agent review journey">
+                            {agentJourney.map((step, index) => (
+                                <AgentJourneyStep
+                                    detail={step.detail}
+                                    isLast={index === agentJourney.length - 1}
+                                    key={`${step.step}-${index}`}
+                                    status={step.status}
+                                    step={step.step}
+                                />
+                            ))}
+                        </ol>
+                    </ReviewSection>
+                )}
+
                 {agentReview && hasSuggestion && (
                     <ReviewSection title="Suggested wording" subtitle="Advisory only. Review the changes before saving.">
                         <div className="space-y-3 rounded-md border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
@@ -187,7 +204,12 @@ export function EmailReviewPanel({
                         </dl>
                         <p>Deterministic check: {riskResult.checked_at ? new Date(riskResult.checked_at).toLocaleString() : "Timestamp unavailable"}</p>
                         {agentReview && (
-                            <p>Provider: {agentReview.model_metadata.provider} / Model: {agentReview.model_metadata.model} / Prompt: {agentReview.model_metadata.prompt_version} / Attempts: {agentReview.model_metadata.attempts}</p>
+                            <p>
+                                Provider: {agentReview.model_metadata.provider} / Model: {agentReview.model_metadata.model} / Prompt: {agentReview.model_metadata.prompt_version}
+                                {` / Model calls: ${agentReview.model_metadata.attempts}`}
+                                {agentReview.model_metadata.loop_steps !== undefined && ` / Loop steps: ${agentReview.model_metadata.loop_steps}`}
+                                {agentReview.model_metadata.tool_calls !== undefined && ` / Tools: ${agentReview.model_metadata.tool_calls}`}
+                            </p>
                         )}
                     </div>
                 </details>
@@ -258,6 +280,37 @@ function ReviewSignal({ icon, label, tone, value }: { icon: ReactNode; label: st
             <p className="mt-1 text-sm font-semibold">{value}</p>
         </div>
     );
+}
+
+function AgentJourneyStep({ detail, isLast, status, step }: { detail: string; isLast: boolean; status: string; step: string }) {
+    const presentation = journeyPresentation(step, status);
+    return (
+        <li className={cn("relative ml-5 pb-4", isLast && "pb-0")}>
+            <span className={cn("absolute -left-[29px] top-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white", presentation.dotClassName)} aria-hidden="true" />
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
+                <p className="text-sm font-medium text-card-foreground">{presentation.label}</p>
+                <span className={cn("w-fit rounded-full px-2 py-0.5 text-[11px] font-medium", presentation.badgeClassName)}>{statusLabel(status)}</span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
+        </li>
+    );
+}
+
+function journeyPresentation(step: string, status: string) {
+    const failed = ["blocked", "failed", "rejected", "unavailable"].includes(status);
+    const base = {
+        badgeClassName: failed ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600",
+        dotClassName: failed ? "bg-red-500" : "bg-primary-500",
+    };
+    if (step === "decide") return { ...base, label: "Agent chose the next step" };
+    if (step === "act") return { ...base, label: "Backend ran a safe tool" };
+    if (step === "observe") return { ...base, label: "Agent observed the tool result" };
+    if (step === "finalize") return { ...base, label: "Agent created the final assessment" };
+    return { ...base, label: "Agent loop stopped safely" };
+}
+
+function statusLabel(status: string) {
+    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 }
 
 function getOverallStatus(
@@ -438,7 +491,10 @@ function agentStatusLabel(review?: AgentReviewResult) {
 }
 
 function agentMetadataLabel(review: AgentReviewResult) {
-    return `${agentStatusLabel(review)} / ${review.model_metadata.model} / ${review.model_metadata.attempts} attempt${review.model_metadata.attempts === 1 ? "" : "s"}`;
+    const toolLabel = review.model_metadata.tool_calls !== undefined
+        ? ` / ${review.model_metadata.tool_calls} safe tools`
+        : "";
+    return `${agentStatusLabel(review)} / ${review.model_metadata.model} / ${review.model_metadata.attempts} model calls${toolLabel}`;
 }
 
 function severityIcon(severity: "blocker" | "error" | "info" | "warning") {

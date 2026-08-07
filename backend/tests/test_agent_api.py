@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.config import get_settings
 from app.db.database import Base, get_db
 from app.main import create_app
-from app.models import Candidate, CandidateStatus, EmailQueue, EmailTemplate, EmailType
+from app.models import Candidate, CandidateStatus, EmailQueue, EmailTemplate, EmailType, OutboxEvent
 from app.services.email_workflow import generate_email_draft
 
 
@@ -243,6 +243,72 @@ class AgentReviewApiTest(unittest.TestCase):
         premature_approval = self.client.post(f"/email-queue/{queue_id}/approve")
         self.assertEqual(premature_approval.status_code, 400)
         self.assertIn("Wait for AI review", premature_approval.json()["detail"])
+
+    def test_pass_cv_contradiction_is_saved_as_a_new_version_for_agent_review(self) -> None:
+        db = self.SessionLocal()
+        try:
+            candidate = Candidate(
+                full_name="Nguyen Minh An",
+                email="an@example.com",
+                position="Backend Developer",
+                stage="CV_SCREENING",
+                status=CandidateStatus.PASS_CV.value,
+            )
+            template = EmailTemplate(
+                name="Interview invitation",
+                email_type=EmailType.INTERVIEW_INVITATION.value,
+                subject="Interview for {{position}}",
+                body="Hi {{candidate_name}}, we would like to invite you to interview for {{position}}.",
+                required_placeholders=["candidate_name", "position"],
+                is_sensitive=False,
+            )
+            db.add_all([candidate, template])
+            db.commit()
+            draft = generate_email_draft(db, candidate.id, None, "creator")
+            risk_result = dict(draft.risk_check_result)
+            async_review = dict(risk_result["async_review"])
+            async_review.update({
+                "status": "COMPLETED",
+                "review_version": risk_result["draft_version"],
+            })
+            risk_result["async_review"] = async_review
+            draft.risk_check_result = risk_result
+            db.commit()
+            queue_id = draft.id
+        finally:
+            db.close()
+
+        response = self.client.patch(
+            f"/email-queue/{queue_id}",
+            json={
+                "subject": "Interview for Backend Developer",
+                "body": (
+                    "Hi Nguyen Minh An,\n\n"
+                    "Thank you for applying for Backend Developer. "
+                    "We will not move forward with your application now, but perhaps next time."
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        saved_risk = response.json()["risk_check_result"]
+        self.assertEqual(saved_risk["draft_version"], 2)
+        self.assertEqual(saved_risk["async_review"]["status"], "QUEUED")
+        self.assertNotIn("agent_review", saved_risk)
+
+        db = self.SessionLocal()
+        try:
+            events = (
+                db.query(OutboxEvent)
+                .filter(OutboxEvent.aggregate_id == queue_id)
+                .order_by(OutboxEvent.id)
+                .all()
+            )
+            self.assertEqual(len(events), 2)
+            self.assertEqual(events[-1].payload_json["draft_version"], 2)
+            self.assertEqual(events[-1].status, "PENDING")
+        finally:
+            db.close()
 
 
 if __name__ == "__main__":
