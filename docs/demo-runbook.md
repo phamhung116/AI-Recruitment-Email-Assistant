@@ -110,10 +110,11 @@ key test sau khi chạy.
 3. Sau Save, chỉ ra “Draft saved – review queued”: HTTP request đã kết thúc mà
    không chờ Gemini.
 4. Mở Email Queue và quan sát `Queued → Reviewing → Completed`.
-5. Mở Technical Review Details, chỉ Queue ID, Draft Version và Review Version.
-6. Giải thích transaction: draft và Outbox Event được lưu cùng nhau trong
+5. Mở Agent Review Journey để chỉ rõ vòng lặp: model chọn tool, backend chạy tool, model quan sát kết quả rồi mới finalize.
+6. Mở Technical Review Details, chỉ Queue ID, Draft Version, Review Version, Loop Steps và Tools.
+7. Giải thích transaction: draft và Outbox Event được lưu cùng nhau trong
    PostgreSQL; dispatcher publish event sang RabbitMQ.
-7. Mở RabbitMQ management nếu cần chứng minh queue `email_review`.
+8. Mở RabbitMQ management nếu cần chứng minh queue `email_review`.
 
 ### C. Redis dedupe và stale protection
 

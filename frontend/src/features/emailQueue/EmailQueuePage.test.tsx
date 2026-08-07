@@ -188,6 +188,26 @@ describe("EmailQueuePage", () => {
         expect(useUiStore.getState().toast?.message).toBe("Draft saved – review queued");
     });
 
+    it("shows a rejected save inside the open review drawer", async () => {
+        const item = queueItem();
+        const validationError = "The draft is missing required candidate information: candidate name.";
+        apiMocks.getEmailQueue.mockResolvedValue([item]);
+        apiMocks.updateEmailQueue.mockRejectedValue(new Error(validationError));
+
+        renderWithQueryClient(<EmailQueuePage />);
+        const drawer = await openReview();
+        const bodyInput = within(drawer).getByLabelText("Body");
+
+        await userEvent.clear(bodyInput);
+        await userEvent.type(bodyInput, "We will move forward next time.");
+        await userEvent.click(within(drawer).getByRole("button", { name: "Save draft" }));
+
+        const alert = await within(drawer).findByRole("alert");
+        expect(alert).toHaveTextContent("Draft was not saved.");
+        expect(alert).toHaveTextContent(validationError);
+        expect(within(drawer).getByRole("button", { name: "Save draft" })).toBeEnabled();
+    });
+
     it("requires explicit confirmation and records only a send simulation", async () => {
         const item = queueItem();
         apiMocks.getEmailQueue.mockResolvedValue([item]);

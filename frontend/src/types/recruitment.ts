@@ -185,6 +185,8 @@ export interface AgentReviewResult {
         skill_name: string;
         skill_version: string;
         attempts: number;
+        loop_steps?: number;
+        tool_calls?: number;
     };
     trace: Array<{
         step: string;

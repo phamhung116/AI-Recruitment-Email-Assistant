@@ -13,6 +13,17 @@ class AgentReviewStatus(str, Enum):
     UNAVAILABLE = "unavailable"
 
 
+class AgentToolName(str, Enum):
+    CHECK_CANDIDATE_FACTS = "check_candidate_facts"
+    CHECK_EMAIL_POLICY = "check_email_policy"
+
+
+class AgentAction(str, Enum):
+    CHECK_CANDIDATE_FACTS = AgentToolName.CHECK_CANDIDATE_FACTS.value
+    CHECK_EMAIL_POLICY = AgentToolName.CHECK_EMAIL_POLICY.value
+    FINALIZE = "finalize"
+
+
 class AgentCandidateFacts(BaseModel):
     full_name: str = Field(min_length=1, max_length=255)
     position: str | None = Field(default=None, max_length=255)
@@ -57,6 +68,31 @@ class AgentReviewRequest(BaseModel):
         if any(len(policy) > 500 for policy in self.company_policy):
             raise ValueError("Each company policy must be at most 500 characters.")
         return self
+
+
+class AgentToolFinding(BaseModel):
+    code: str = Field(pattern=r"^TOOL_[A-Z0-9_]+$", max_length=100)
+    severity: IssueSeverity
+    message: str = Field(min_length=1, max_length=500)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class AgentToolObservation(BaseModel):
+    tool: AgentToolName
+    summary: str = Field(min_length=1, max_length=500)
+    findings: list[AgentToolFinding] = Field(default_factory=list, max_length=20)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class AgentRunState(BaseModel):
+    step: int = Field(default=0, ge=0, le=10)
+    called_tools: list[AgentToolName] = Field(default_factory=list, max_length=5)
+    observations: list[AgentToolObservation] = Field(default_factory=list, max_length=5)
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class ReviewQueuedDraftRequest(BaseModel):
@@ -108,13 +144,30 @@ class AgentModelOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class AgentStepDecision(BaseModel):
+    action: AgentAction
+    final_result: AgentModelOutput | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def validate_action_payload(self) -> "AgentStepDecision":
+        if self.action == AgentAction.FINALIZE and self.final_result is None:
+            raise ValueError("finalize requires final_result.")
+        if self.action != AgentAction.FINALIZE and self.final_result is not None:
+            raise ValueError("Tool actions cannot include final_result.")
+        return self
+
+
 class AgentModelMetadata(BaseModel):
     provider: str
     model: str
     prompt_version: str
     skill_name: str
     skill_version: str
-    attempts: int = Field(ge=0, le=3)
+    attempts: int = Field(ge=0, le=10)
+    loop_steps: int = Field(default=0, ge=0, le=10)
+    tool_calls: int = Field(default=0, ge=0, le=10)
 
     model_config = ConfigDict(extra="forbid")
 

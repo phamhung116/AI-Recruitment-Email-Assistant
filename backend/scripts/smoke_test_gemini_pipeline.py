@@ -109,6 +109,9 @@ def main() -> None:
             "provider": review["model_metadata"]["provider"],
             "model": review["model_metadata"]["model"],
             "attempts": review["model_metadata"]["attempts"],
+            "loop_steps": review["model_metadata"]["loop_steps"],
+            "tool_calls": review["model_metadata"]["tool_calls"],
+            "trace_steps": [step["step"] for step in review["trace"]],
             "issue_count": len(review["issues"]),
         }, indent=2))
     finally:

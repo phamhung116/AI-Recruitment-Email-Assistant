@@ -71,7 +71,7 @@ class GeminiAgentProvider:
             "configured": self.is_configured,
             "timeout_seconds": self.settings.gemini_timeout_seconds,
             "max_retries": self.settings.gemini_max_retries,
-            "max_agent_steps": self.settings.gemini_agent_max_steps,
+            "max_agent_steps": self.settings.gemini_effective_agent_steps,
         }
 
     @contextmanager

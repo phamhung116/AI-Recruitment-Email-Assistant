@@ -131,6 +131,7 @@ export function EmailQueuePage() {
         onError: (error) => showToast(error.message, "error"),
     });
     function openItem(item: EmailQueueItem) {
+        updateMutation.reset();
         setSelectedItem(item);
         setIsDraftDirty(false);
     }
@@ -219,13 +220,16 @@ export function EmailQueuePage() {
             <EmailPreviewDrawer
                 item={selectedItem}
                 isDirty={isDraftDirty}
+                saveError={updateMutation.error?.message ?? null}
                 isSaving={updateMutation.isPending}
                 onAction={(action) => setPendingAction(action)}
                 onChange={(item) => {
+                    if (updateMutation.isError) updateMutation.reset();
                     setSelectedItem(item);
                     setIsDraftDirty(true);
                 }}
                 onClose={() => {
+                    if (updateMutation.isError) updateMutation.reset();
                     setSelectedItem(null);
                     setIsDraftDirty(false);
                 }}
@@ -275,7 +279,7 @@ function getSortValue(item: EmailQueueItem, sortBy: string) {
     return "";
 }
 
-function EmailPreviewDrawer({ item, isDirty, isSaving, onAction, onChange, onClose, onSave }: { item: EmailQueueItem | null; isDirty: boolean; isSaving: boolean; onAction: (action: QueueAction) => void; onChange: (item: EmailQueueItem) => void; onClose: () => void; onSave: () => void }) {
+function EmailPreviewDrawer({ item, isDirty, saveError, isSaving, onAction, onChange, onClose, onSave }: { item: EmailQueueItem | null; isDirty: boolean; saveError: string | null; isSaving: boolean; onAction: (action: QueueAction) => void; onChange: (item: EmailQueueItem) => void; onClose: () => void; onSave: () => void }) {
     const isEditable = Boolean(item && ["DRAFT", "PENDING_APPROVAL", "APPROVED"].includes(item.status));
     const canApprove = Boolean(item && ["DRAFT", "PENDING_APPROVAL"].includes(item.status));
     const canSimulate = Boolean(item && (item.status === "APPROVED" || (item.status === "DRAFT" && !item.requires_hr_approval)));
@@ -319,6 +323,11 @@ function EmailPreviewDrawer({ item, isDirty, isSaving, onAction, onChange, onClo
                         riskResult={item.risk_check_result}
                     />
                     <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center gap-2 border-t border-border bg-card/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:px-6">
+                        {saveError && (
+                            <div className="basis-full rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900" role="alert">
+                                <span className="font-semibold">Draft was not saved.</span>{" "}{saveError}
+                            </div>
+                        )}
                         {isEditable && (
                             <Button disabled={!isDirty || isSaving} onClick={onSave}>
                                 <Save className="h-4 w-4" />

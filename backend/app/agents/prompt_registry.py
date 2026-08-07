@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-PROMPT_VERSION = "semantic_review.v1"
+PROMPT_VERSION = "semantic_review.v2"
 MAX_PROMPT_BYTES = 32 * 1024
 
 
