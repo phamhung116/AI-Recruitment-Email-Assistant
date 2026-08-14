@@ -198,3 +198,8 @@ These are acceptable for the MVP scope. Any change that makes one of them worse,
 - Update docs when behavior, API contracts, setup, or safety policy changes.
 - Add or update tests with implementation changes once test infrastructure exists.
 - When a fact cannot be verified, document it as `Unknown`, `Not implemented`, or `Needs confirmation`.
+
+## Skill Triggering Rules
+
+- **Slash Invocation for Skills (`/skill-name`):** Whenever the user starts a prompt with a slash followed by a skill name (e.g. `/team2-ba`, `/team1-qa-qc`, `/team1-product`, `/team1-architecture`, `/recruitment-email-review`), the AI agent MUST automatically recognize it as an explicit command to load, trigger, and execute that specific skill. Strip the leading `/` and match against the skill `name` in frontmatter.
+
