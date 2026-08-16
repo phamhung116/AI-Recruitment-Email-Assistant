@@ -17,6 +17,7 @@ vi.mock("@/services/recruitmentApi", () => ({
 }));
 
 const candidate: Candidate = {
+    application_id: "APP-TEST-002",
     id: 3,
     full_name: "Nguyen Minh An",
     email: "an.nguyen@example.com",

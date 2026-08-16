@@ -1,16 +1,18 @@
 import { spawn } from "node:child_process";
 import { rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const frontendRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const backendRoot = path.resolve(frontendRoot, "../backend");
-const pythonExecutable = process.platform === "win32"
+const virtualEnvPython = process.platform === "win32"
     ? path.join(backendRoot, ".venv", "Scripts", "python.exe")
     : path.join(backendRoot, ".venv", "bin", "python");
+const pythonExecutable = process.env.PYTHON_EXECUTABLE || (existsSync(virtualEnvPython) ? virtualEnvPython : "python");
 const viteCli = path.join(frontendRoot, "node_modules", "vite", "bin", "vite.js");
 const playwrightCli = path.join(frontendRoot, "node_modules", "@playwright", "test", "cli.js");
-const e2eDatabase = path.join(backendRoot, ".e2e", "recruitment-e2e.sqlite3");
+const e2eDatabase = path.join(backendRoot, "..", ".staging", "e2e", "recruitment-e2e.sqlite3");
 const serverProcesses = [];
 
 function startProcess(command, args, options) {
@@ -60,16 +62,10 @@ async function stopProcess(child) {
 }
 
 async function main() {
-    const asyncEnvironment = {
-        ...process.env,
-        DATABASE_URL: `sqlite+pysqlite:///${e2eDatabase.replaceAll("\\", "/")}`,
-        GEMINI_AGENT_ENABLED: "false",
-        GEMINI_API_KEY: "",
-    };
     const backend = startProcess(pythonExecutable, ["-m", "scripts.run_e2e_server"], {
         cwd: backendRoot,
     });
-    const frontend = startProcess(process.execPath, [viteCli, "--host", "127.0.0.1", "--port", "14173", "--strictPort"], {
+    const frontend = startProcess(process.execPath, [viteCli, "--configLoader", "runner", "--host", "127.0.0.1", "--port", "14173", "--strictPort"], {
         cwd: frontendRoot,
         env: {
             ...process.env,
@@ -82,17 +78,6 @@ async function main() {
             waitForUrl("http://127.0.0.1:18000/health", backend),
             waitForUrl("http://127.0.0.1:14173", frontend),
         ]);
-        startProcess(pythonExecutable, [
-            "-m", "celery", "-A", "app.messaging.celery_app:celery_app", "worker",
-            "--pool=solo", "--loglevel=WARNING", "--queues=email_review", "--hostname=browser-e2e@%h",
-        ], {
-            cwd: backendRoot,
-            env: asyncEnvironment,
-        });
-        startProcess(pythonExecutable, ["-m", "scripts.run_outbox_dispatcher"], {
-            cwd: backendRoot,
-            env: asyncEnvironment,
-        });
         const runner = spawn(process.execPath, [playwrightCli, "test", ...process.argv.slice(2)], {
             cwd: frontendRoot,
             shell: false,

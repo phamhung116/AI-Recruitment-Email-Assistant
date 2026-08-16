@@ -1,11 +1,11 @@
 # Canonical Product Specification: Recruitment Mail Guard (Minimal Real-Email MVP)
 
-- **Document Status**: APPROVED_BASELINE_FOR_BA
-- **Version**: 1.0.1
-- **Last Updated**: 2026-08-12
+- **Document Status**: APPROVED_FOR_DELIVERY
+- **Version**: 1.0.2
+- **Last Updated**: 2026-08-17
 
 ## 1. Document Status & Versioning
-Official Baseline Specification for Team1 Recruitment Mail Guard. Version 1.0.1 approved by User on 2026-08-12 following non-material BA reconciliation normalization for handoff to Business Analysis (`team1-ba`).
+Official delivery specification for Team1 Recruitment Mail Guard. Version 1.0.2 was reconfirmed by the User on 2026-08-17 after completed BA reconciliation. The approved MVP sends one real candidate email at a time only after deterministic checks and explicit HR confirmation.
 
 ## 2. Product Vision
 Provide an unyielding deterministic safety guard for HR recruitment communications, ensuring zero brand-damaging contradictory decision emails per job application and stage.
@@ -177,5 +177,6 @@ Batch sending, auto sending, bounce tracking, marketing campaigns, LLM blocking 
 
 ## 21. Approval Record
 - Confirmed by User on 2026-08-12 (v1.0.1 Non-Material Normalizations)
-- Status: APPROVED_BASELINE_FOR_BA
+- Reconfirmed by User on 2026-08-17: real-email MVP; continue delivery from the newly merged implementation plan.
+- Status: APPROVED_FOR_DELIVERY
 

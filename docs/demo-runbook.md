@@ -1,159 +1,100 @@
 # Demo Runbook
 
-Runbook này dùng dữ liệu synthetic cho một phần trình bày 7–10 phút. Hệ thống
-chỉ mô phỏng gửi email, không chuyển email thật ra ngoài.
+This runbook demonstrates the current Recruitment Mail Guard workflow. The application uses PostgreSQL, FastAPI, React and the Resend HTTP API. Gemini, RabbitMQ, Redis, Celery and simulated sending are not part of the active runtime.
 
 ## 1. Preflight
 
-Từ root repository:
+From the repository root:
 
 ```powershell
-docker compose up -d postgres rabbitmq redis
+docker compose up -d postgres
 docker compose ps
 ```
 
-Ba container phải ở trạng thái `healthy`. RabbitMQ management có tại
-`http://localhost:15672` với tài khoản local `guest/guest`.
-
-Chuẩn bị backend:
+Prepare the backend with a fresh database:
 
 ```powershell
 Set-Location backend
-Copy-Item .env.example .env   # bỏ qua nếu .env đã được cấu hình
+Copy-Item .env.example .env
 .venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe -m alembic upgrade head
 .venv\Scripts\python.exe -m app.db.seed
 ```
 
-Để demo Gemini thật, xác nhận trong `backend/.env`:
+Configure these values in `backend/.env` for a controlled real-email demonstration:
 
 ```text
-GEMINI_AGENT_ENABLED=true
-GEMINI_API_KEY=<server-side-key>
-GEMINI_MODEL=gemini-2.5-flash
+RESEND_API_KEY=<server-side-key>
+EMAIL_SENDER_ADDRESS=recruitment@your-verified-domain.example
+EMAIL_SENDER_NAME=HiLab Recruitment Team
 ```
 
-Không mở hoặc nhập lại API key trên màn hình trình chiếu.
+Never display, commit or place the Resend API key in frontend configuration. Use a test candidate email address controlled by the presenter.
 
-## 2. Khởi động đủ sáu thành phần
+The initial Alembic migration targets a fresh database. Do not apply it blindly to the legacy prototype database; first back up the database and approve mappings for legacy stage/status values.
 
-### Terminal 1 — PostgreSQL, RabbitMQ, Redis
+## 2. Start The Application
 
-```powershell
-docker compose up -d postgres rabbitmq redis
-```
-
-### Terminal 2 — FastAPI
+Backend terminal:
 
 ```powershell
 Set-Location backend
 .venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
-### Terminal 3 — Outbox Dispatcher
-
-```powershell
-Set-Location backend
-.venv\Scripts\python.exe -m scripts.run_outbox_dispatcher
-```
-
-### Terminal 4 — Agent Worker
-
-```powershell
-Set-Location backend
-.venv\Scripts\python.exe -m celery -A app.messaging.celery_app:celery_app worker --pool=solo --loglevel=INFO --queues=email_review
-```
-
-### Terminal 5 — Frontend
+Frontend terminal:
 
 ```powershell
 Set-Location frontend
+npm install
 npm run dev
 ```
 
-Mở `http://localhost:5173`. Giữ `http://localhost:8000/docs` và
-`http://localhost:15672` làm màn hình kỹ thuật dự phòng.
+Open `http://localhost:5173`. API documentation is available at `http://localhost:8000/docs`.
 
-## 3. Kiểm tra trước khi trình bày
+## 3. Verification Before The Demo
 
 ```powershell
 # backend/
-.venv\Scripts\python.exe -m unittest discover -s tests -v
-.venv\Scripts\python.exe -m scripts.smoke_test_async_pipeline
-
-# Chỉ chạy khi đã cấu hình Gemini thật
-.venv\Scripts\python.exe -m scripts.smoke_test_gemini_pipeline
+.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider
+.venv\Scripts\python.exe scripts\export_openapi.py --check
 
 # frontend/
 npm test
 npm run build
+```
+
+Browser E2E intentionally stops at the real-send confirmation dialog and does not call Resend:
+
+```powershell
+$env:PLAYWRIGHT_CHANNEL = "chrome"
 npm run test:e2e
 ```
 
-Smoke/E2E dùng SQLite riêng trong `backend/.e2e` và dữ liệu synthetic. E2E tắt
-Gemini nhưng vẫn dùng RabbitMQ và Redis thật. Các script tự dọn database và Redis
-key test sau khi chạy.
+## 4. Demo Journey
 
-## 4. Kịch bản trình bày
+1. Open Candidates and import or select a synthetic candidate.
+2. Review the candidate Application ID, Stage and Decision.
+3. Generate a fixed-catalog email draft.
+4. Show the protected decision-critical content and deterministic safety findings.
+5. Edit the allowed subject or content area to create a new immutable revision.
+6. Select Send and show that no provider request occurs before explicit HR confirmation.
+7. Confirm only when the recipient is a controlled test mailbox.
+8. Open Email Operations and show the logical operation, provider attempt and provider message ID.
+9. Open Audit Logs and show the draft/send events without exposing the email body or recipient PII.
 
-### A. Policy trước AI
+## 5. Failure And Recovery Cases
 
-1. Mở Candidates và chọn `Do Gia Bao`.
-2. Chọn Generate Email Draft.
-3. Chỉ ra `PENDING → No email allowed` và nút Continue bị khóa.
-4. Giải thích: backend policy quyết định loại email; Gemini không được thay đổi
-   quyết định tuyển dụng.
+- Missing API key or sender configuration blocks the provider call.
+- A definitive provider rejection records the failure and does not mark the candidate outcome as communicated.
+- A timeout or lost response becomes `DELIVERY_UNKNOWN`; do not create a new send blindly.
+- Reconciliation within the provider idempotency window replays the same logical operation and idempotency key.
+- Manual resolution requires acknowledgement, actor and rationale and is always audited.
 
-### B. Transactional Outbox và async review
+## 6. Current Limitations
 
-1. Chọn `Nguyen Minh An`, Generate Email Draft.
-2. Trình bày `PASS_CV → INTERVIEW_INVITATION` và verified template.
-3. Sau Save, chỉ ra “Draft saved – review queued”: HTTP request đã kết thúc mà
-   không chờ Gemini.
-4. Mở Email Queue và quan sát `Queued → Reviewing → Completed`.
-5. Mở Agent Review Journey để chỉ rõ vòng lặp: model chọn tool, backend chạy tool, model quan sát kết quả rồi mới finalize.
-6. Mở Technical Review Details, chỉ Queue ID, Draft Version, Review Version, Loop Steps và Tools.
-7. Giải thích transaction: draft và Outbox Event được lưu cùng nhau trong
-   PostgreSQL; dispatcher publish event sang RabbitMQ.
-8. Mở RabbitMQ management nếu cần chứng minh queue `email_review`.
-
-### C. Redis dedupe và stale protection
-
-1. Giải thích worker lấy Redis `SET NX` lock theo queue/version/hash.
-2. Sửa subject/body rồi Save lại để tạo draft version mới.
-3. Chỉ ra Approve và Simulate Send bị khóa trong lúc review.
-4. Khi review mới hoàn tất, Review Version phải khớp Draft Version mới mở action.
-5. Kết quả Gemini của version cũ được đánh dấu Stale và không thể ghi đè.
-
-### D. Human in the loop và lifecycle
-
-1. Với draft nhạy cảm của `Tran Bao Chau`, chỉ ra HR approval bắt buộc.
-2. Approve sau khi kiểm tra nội dung.
-3. Chọn Simulate Send và đọc thông báo “No real email will be delivered”.
-4. Sau SENT, item read-only; draft/approved cũ cùng candidate + email type tự
-   chuyển CANCELLED và có audit log.
-5. Mở Email History và Audit Logs để kết thúc câu chuyện.
-
-## 5. Fallback an toàn
-
-Nếu Gemini, RabbitMQ hoặc Redis không ổn định:
-
-1. Không quay lại gọi Gemini đồng bộ.
-2. Draft vẫn được lưu trong PostgreSQL cùng Outbox Event.
-3. UI hiển thị Queued hoặc Unavailable; Approve/Simulate Send vẫn bị khóa.
-4. Dùng kết quả `smoke_test_async_pipeline` để chứng minh fallback.
-5. Không tuyên bố review Completed nếu provider đang unavailable.
-
-Nếu dispatcher/worker dừng giữa demo, khởi động lại hai process; event PENDING vẫn
-nằm trong PostgreSQL để dispatcher retry.
-
-## 6. Giới hạn và bước tiếp theo
-
-- Chưa có Alembic; demo tạo bảng bằng `create_all()`.
-- Chưa có resend workflow hoàn chỉnh.
-- Chưa có DLQ dashboard, RabbitMQ/Redis cluster hoặc production monitoring.
-- Chưa có authentication/RBAC.
-- Chưa gửi email thật.
-- JSON review metadata chưa được chuẩn hóa thành các bảng domain riêng.
-
-Thông điệp chốt: PostgreSQL giữ sự thật, RabbitMQ vận chuyển job, Redis hỗ trợ
-idempotency/progress, Gemini chỉ tư vấn, và HR giữ quyền quyết định cuối cùng.
+- No authentication, RBAC or rate limiting; use only on a trusted local/internal network.
+- Resend acceptance means the provider accepted the request, not guaranteed inbox delivery.
+- Delivery and bounce webhooks are not implemented yet.
+- No bulk or automatic sending.
+- No LLM semantic review in the current MVP.

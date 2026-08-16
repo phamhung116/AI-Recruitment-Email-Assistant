@@ -1,17 +1,16 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.agentRoutes import router as agent_router
-from app.api.auditLogRoutes import router as audit_log_router
-from app.api.candidateRoutes import router as candidate_router
-from app.api.dashboardRoutes import router as dashboard_router
-from app.api.emailHistoryRoutes import router as email_history_router
-from app.api.emailQueueRoutes import router as email_queue_router
-from app.api.emailTemplateRoutes import router as email_template_router
 from app.api.routes import router
+from app.api.v1.errors import (
+    SERVICE_ERRORS,
+    service_error_handler,
+    v1_http_error_handler,
+    v1_validation_error_handler,
+)
+from app.api.v1.router import router as v1_router
 from app.core.config import get_settings
-from app.db.database import Base, engine
-from app.db.schemaMaintenance import ensure_candidate_status_metadata_columns
 
 
 def create_app() -> FastAPI:
@@ -25,20 +24,12 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(router)
-    app.include_router(agent_router)
-    app.include_router(dashboard_router)
-    app.include_router(candidate_router)
-    app.include_router(email_template_router)
-    app.include_router(email_queue_router)
-    app.include_router(email_history_router)
-    app.include_router(audit_log_router)
+    app.include_router(v1_router)
+    for error_type in SERVICE_ERRORS:
+        app.add_exception_handler(error_type, service_error_handler)
+    app.add_exception_handler(HTTPException, v1_http_error_handler)
+    app.add_exception_handler(RequestValidationError, v1_validation_error_handler)
     return app
 
 
 app = create_app()
-
-
-@app.on_event("startup")
-def create_tables() -> None:
-    Base.metadata.create_all(bind=engine)
-    ensure_candidate_status_metadata_columns()

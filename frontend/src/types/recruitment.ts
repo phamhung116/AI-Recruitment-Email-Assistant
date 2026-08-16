@@ -28,6 +28,7 @@ export type QueueStatus =
 
 export interface Candidate {
     id: number;
+    application_id: string;
     full_name: string;
     email: string | null;
     phone: string | null;
@@ -41,6 +42,91 @@ export interface Candidate {
     note: string | null;
     created_at: string;
     updated_at: string;
+    communicated_decision?: string | null;
+    communicated_stage?: string | null;
+    communicated_at?: string | null;
+}
+
+export type DraftStatus =
+    | "DRAFT_PENDING_CHECK"
+    | "READY_TO_SEND"
+    | "BLOCKED_DETERMINISTIC"
+    | "FROZEN_IN_FLIGHT"
+    | "SUPERSEDED"
+    | "CORRECTION_DRAFT"
+    | "DISCARDED"
+    | "FINALIZED";
+
+export type OperationStatus =
+    | "SENDING_UNCONFIRMED"
+    | "PROVIDER_ACCEPTED"
+    | "DEFINITIVE_FAILURE"
+    | "DELIVERY_UNKNOWN"
+    | "FAILED_TERMINAL";
+
+export interface DraftRevision {
+    id: string;
+    candidate_id: number;
+    revision_number: number;
+    template_code: string;
+    stage: string;
+    decision: string;
+    to_email: string;
+    subject: string;
+    decision_critical_content: string;
+    editable_content: string;
+    rendered_body: string;
+    status: DraftStatus;
+    is_correction: boolean;
+    correction_rationale: string | null;
+    prior_operation_id: string | null;
+    risk_check_result: RiskCheckResult;
+    created_by: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ProviderAttempt {
+    id: string;
+    attempt_number: number;
+    attempt_status: string;
+    http_status_code: number | null;
+    provider_message_id: string | null;
+    error_code: string | null;
+    error_message: string | null;
+    latency_ms: number | null;
+    initiated_at: string;
+    completed_at: string | null;
+}
+
+export interface SendOperation {
+    id: string;
+    draft_revision_id: string;
+    operation_status: OperationStatus;
+    provider_name: string;
+    provider_message_id: string | null;
+    final_outcome: string | null;
+    failure_category: string | null;
+    resolution_mode: string | null;
+    resolution_rationale: string | null;
+    resolved_by: string | null;
+    resolved_at: string | null;
+    created_by: string;
+    created_at: string;
+    updated_at: string;
+    attempts: ProviderAttempt[];
+}
+
+export interface AuditEvent {
+    id: number;
+    event_name: string;
+    entity_type: string;
+    entity_id: string;
+    application_id: string | null;
+    actor: string;
+    action_outcome: string;
+    payload_json: Record<string, unknown>;
+    created_at: string;
 }
 
 export interface PaginatedResponse<TItem> {

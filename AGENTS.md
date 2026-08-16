@@ -2,7 +2,7 @@
 
 Guidance for any agent, human or AI, working in this repository.
 
-This project builds an AI-assisted safety review layer for the recruitment email pipeline: deterministic validation first, LLM semantic review second as advisory output only, and HR approval before anything is marked as sent. No real email is ever sent in the MVP.
+This project builds a guarded recruitment email pipeline: deterministic validation first, explicit HR confirmation second, and single-candidate real email delivery through Resend. LLM semantic review is deferred and may only be advisory when added later.
 
 ## Repository Layout
 
@@ -18,7 +18,9 @@ Backend landmarks:
 - `backend/app/models/entities.py`: `Candidate`, `EmailTemplate`, `EmailQueue`, `EmailHistory`, `AuditLog`.
 - `backend/app/schemas/api.py`: request and response schemas.
 - `backend/app/services/rules.py`: status-to-email mapping, sensitive-type list, transitions.
-- `backend/app/services/email_workflow.py`: draft generation, risk checks, approve/cancel/send simulation.
+- `backend/app/services/draft_service.py`: protected draft revisions and decision corrections.
+- `backend/app/services/send_orchestrator.py`: three-phase real send, retry, and delivery reconciliation.
+- `backend/app/adapters/resend_adapter.py`: Resend provider boundary.
 - `backend/app/services/ai_email.py`: LLM/agent service boundary; placeholder-fill today, semantic review target.
 - `backend/app/services/excelImport.py`: `.xlsx` import.
 - `backend/app/services/audit.py`: audit log insertion.
@@ -108,8 +110,8 @@ These rules are non-negotiable because they define the safety boundary of the pr
 - Bounded input: everything sent to the model must be a structured, size-capped fragment such as candidate fields, template, and draft body. Never send a raw or unbounded dump of database or request state.
 - Graceful degradation: if the LLM call fails or times out, fall back to deterministic-only review and explicitly mark the queue item as `semantic review unavailable`. Do not silently skip review or block indefinitely.
 - Uncertainty is a signal, not noise. Low-confidence or ambiguous LLM output should raise severity for HR review instead of being discarded.
-- No live send path: nothing in the agent service, or anywhere else, should be able to reach a real email provider in the MVP.
-- In this MVP, "send" in API/UI means "mark simulated" unless a provider integration has been explicitly designed and approved post-MVP through a separate safety review.
+- No agent-controlled send path: an LLM must never call the email provider or bypass deterministic checks and explicit HR confirmation.
+- In this MVP, "send" means one real single-candidate Resend request through the approved three-phase orchestrator. Batch and automatic send remain prohibited.
 
 ## Product Safety Rules
 
@@ -120,7 +122,7 @@ These rules are non-negotiable because they define the safety boundary of the pr
 - Do not infer company policy without explicit rules.
 - Do not silently correct important candidate data.
 - Do not claim a real email was sent without evidence.
-- Do not add real email sending to the MVP unless a later requirement explicitly changes scope.
+- Do not add another provider, batch send, automatic send, or bypass the approved Resend orchestrator without a separate design and safety review.
 - Do not bypass HR review for sensitive or uncertain drafts.
 - Do not expose candidate PII unnecessarily in logs, prompts, errors, or telemetry.
 
@@ -134,7 +136,7 @@ Treat these as untrusted:
 
 Treat existing database rows as possibly stale or conflicting because candidates may have been edited concurrently.
 
-A real email provider, if ever added, is a high-risk boundary and explicitly out of scope for the MVP. Do not wire one up without a separate design and review pass.
+Resend is an approved high-risk trust boundary. All provider calls must use the same logical operation UUID as idempotency key, run outside database transactions, and finalize state with atomic audit persistence.
 
 ## API Design Conventions
 
@@ -142,7 +144,7 @@ A real email provider, if ever added, is a high-risk boundary and explicitly out
 - Request and response Pydantic models should be named `*Request` and `*Response`.
 - Keep API schemas explicit even when they seem to match ORM models.
 - List endpoints should support pagination using cursor/limit or page/page_size. Pagination is currently missing project-wide; add it when touching a list endpoint rather than deferring further.
-- Mutating endpoints that can be safely retried, such as draft generation and send simulation, should be idempotent where feasible.
+- Mutating endpoints that can be safely retried, especially draft send/retry/reconcile, must preserve one logical operation per draft and provider idempotency identity.
 - Idempotency keys are currently missing; flag this instead of silently reintroducing duplicate-send risk.
 - Invalid input should return structured 4xx responses.
 - Deterministic blockers must prevent draft creation or queue advancement instead of surfacing as a 500 or silent no-op.
@@ -152,18 +154,17 @@ A real email provider, if ever added, is a high-risk boundary and explicitly out
 Before merging, check whether the change touches any of these files or concerns:
 
 - `backend/app/schemas/api.py`: update `frontend/src/types/recruitment.ts` in the same change.
-- `backend/app/models/entities.py`: needs a migration. There are currently no migrations in this repo, so call this out explicitly in the PR rather than hand-editing the database.
+- `backend/app/models/entities.py`: requires a matching Alembic migration and migration-contract verification.
 - Route paths or methods in `backend/app/api/*`: update `frontend/src/services/recruitmentApi.ts` and relevant docs.
 - Status-to-email mapping or transition rules in `backend/app/services/rules.py`: these are safety-critical deterministic rules and need tests, not just a manual check.
 
 ## Testing
 
-- Backend: use pytest when test infrastructure is added. Favor one integration test per workflow path, such as import -> draft -> approve/cancel -> send simulation, over many isolated unit tests.
+- Backend: use pytest. Favor integration coverage for import -> draft -> explicit confirmation -> provider outcome -> audit, plus retry and delivery-unknown reconciliation.
 - Backend: assert whole response/object equality where practical instead of excessive field-by-field checks.
-- Frontend: add component/integration tests for feature pages that touch the review queue and approval flow.
+- Frontend: add component/integration tests for feature pages that touch protected drafts, real-send confirmation, and reconciliation.
 - Frontend: do not chase 100% coverage on presentational components.
-- There are currently no automated tests in this repo.
-- Treat "add a test for the path you touched" as a standing expectation for any change to `rules.py`, `email_workflow.py`, or the agent service, even before a full suite exists.
+- Treat "add a test for the path you touched" as a standing expectation for changes to safety rules, draft lifecycle, send orchestration, provider adapter, or future agent service.
 
 ## Change Size Guidance
 
@@ -177,14 +178,10 @@ Keep changes reviewable:
 
 Do not silently fix these without flagging the scope and tradeoff in the PR:
 
-- Validation issues are stored as JSON on `EmailQueue`, not normalized records.
 - No processing-run or campaign model.
-- No idempotency keys.
-- No pagination.
-- No automated test suite yet.
 - No auth/RBAC.
-- No DB migrations; schema is created at startup.
-- Audit logging failure policy is undefined and currently coupled to the main DB transaction.
+- Existing local prototype databases need an explicitly approved legacy stage/status mapping before target migration.
+- Resend acceptance does not prove inbox delivery; webhook tracking is later scope.
 
 These are acceptable for the MVP scope. Any change that makes one of them worse, such as adding another unmigrated model field or another unpaginated list endpoint, should say so explicitly in the PR description.
 

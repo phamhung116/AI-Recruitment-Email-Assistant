@@ -17,6 +17,7 @@ from app.models import (
     OperationStatus,
 )
 from app.schemas.validation import ValidationResult
+from app.services.audit_service import AuditEvent, append_audit_event
 from app.services.safety_guard import (
     CandidateSafetyFacts,
     ContradictionWorkflow,
@@ -97,6 +98,21 @@ def generate_draft(
         actor=actor,
     )
     _validate_and_finalize(candidate, draft)
+    append_audit_event(
+        db,
+        event=AuditEvent.DRAFT_GENERATED,
+        entity_type="DRAFT_REVISION",
+        entity_id=draft.id,
+        application_id=candidate.application_id,
+        actor=actor,
+        payload={
+            "revision_number": draft.revision_number,
+            "stage": draft.stage,
+            "decision": draft.decision,
+            "draft_status": draft.status,
+            "is_correction": False,
+        },
+    )
     return draft
 
 
@@ -158,6 +174,21 @@ def revise_draft(
         actor=actor,
     )
     _validate_and_finalize(candidate, revised)
+    append_audit_event(
+        db,
+        event=AuditEvent.DRAFT_GENERATED,
+        entity_type="DRAFT_REVISION",
+        entity_id=revised.id,
+        application_id=candidate.application_id,
+        actor=actor,
+        payload={
+            "revision_number": revised.revision_number,
+            "stage": revised.stage,
+            "decision": revised.decision,
+            "draft_status": revised.status,
+            "is_correction": False,
+        },
+    )
     return revised
 
 
@@ -254,6 +285,20 @@ def create_decision_correction(
     candidate.status_updated_by = actor
     db.add(draft)
     db.flush()
+    append_audit_event(
+        db,
+        event=AuditEvent.DECISION_CORRECTED,
+        entity_type="DRAFT_REVISION",
+        entity_id=draft.id,
+        application_id=candidate.application_id,
+        actor=actor,
+        payload={
+            "previous_decision": communicated_decision,
+            "new_decision": decision,
+            "stage": stage,
+            "prior_operation_id": str(prior_operation.id),
+        },
+    )
     return draft
 
 

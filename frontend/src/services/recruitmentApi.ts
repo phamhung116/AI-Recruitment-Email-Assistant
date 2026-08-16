@@ -1,15 +1,17 @@
 import type {
     AgentReviewResult,
-    AuditLogItem,
+    AuditEvent,
     Candidate,
     CandidateUpdatePayload,
     DashboardStats,
     EmailHistoryItem,
     EmailQueueItem,
     EmailTemplate,
+    DraftRevision,
     ImportPreviewResult,
     ImportResult,
     PaginatedResponse,
+    SendOperation,
 } from "@/types/recruitment";
 
 import { httpClient } from "./httpClient";
@@ -23,6 +25,8 @@ export interface CandidateFilters {
     page_size?: number;
     sort_by?: string;
     sort_order?: "asc" | "desc";
+    sort?: string;
+    direction?: "asc" | "desc";
 }
 
 export interface QueueFilters {
@@ -38,15 +42,31 @@ export interface CandidateFilterOptions {
 
 export const recruitmentApi = {
     getDashboardStats: async () => {
-        const response = await httpClient.get<DashboardStats>("/dashboard");
-        return response.data;
+        const [candidates, operations] = await Promise.all([
+            httpClient.get<PaginatedResponse<Candidate>>("/api/v1/candidates", { params: { page_size: 1 } }),
+            httpClient.get<PaginatedResponse<SendOperation>>("/api/v1/send-operations", { params: { page_size: 100 } }),
+        ]);
+        return {
+            total_candidates: candidates.data.total,
+            pending_emails: operations.data.items.filter((item) => item.operation_status === "SENDING_UNCONFIRMED" || item.operation_status === "DELIVERY_UNKNOWN").length,
+            sent_emails: operations.data.items.filter((item) => item.operation_status === "PROVIDER_ACCEPTED").length,
+            failed_emails: operations.data.items.filter((item) => item.operation_status === "DEFINITIVE_FAILURE" || item.operation_status === "FAILED_TERMINAL").length,
+        } satisfies DashboardStats;
     },
     getCandidates: async (params: CandidateFilters = {}) => {
-        const response = await httpClient.get<PaginatedResponse<Candidate>>("/candidates", { params });
+        const response = await httpClient.get<PaginatedResponse<Candidate>>("/api/v1/candidates", {
+            params: {
+                ...params,
+                sort: params.sort ?? params.sort_by,
+                direction: params.direction ?? params.sort_order,
+                sort_by: undefined,
+                sort_order: undefined,
+            },
+        });
         return response.data;
     },
     getCandidate: async (candidateId: number) => {
-        const response = await httpClient.get<Candidate>(`/candidates/${candidateId}`);
+        const response = await httpClient.get<Candidate>(`/api/v1/candidates/${candidateId}`);
         return response.data;
     },
     getCandidateFilterOptions: async () => {
@@ -80,7 +100,7 @@ export const recruitmentApi = {
         const formData = new FormData();
         formData.append("file", file);
 
-        const response = await httpClient.post<ImportResult>("/candidates/import", formData, {
+        const response = await httpClient.post<ImportResult>("/api/v1/candidates/import", formData, {
             onUploadProgress: (event) => {
                 if (!event.total || !onUploadProgress) {
                     return;
@@ -96,7 +116,7 @@ export const recruitmentApi = {
         const formData = new FormData();
         formData.append("file", file);
 
-        const response = await httpClient.post<ImportPreviewResult>("/candidates/import/preview", formData);
+        const response = await httpClient.post<ImportPreviewResult>("/api/v1/candidates/import/preview", formData);
         return response.data;
     },
     getTemplates: async () => {
@@ -160,7 +180,65 @@ export const recruitmentApi = {
         return response.data;
     },
     getAuditLogs: async () => {
-        const response = await httpClient.get<AuditLogItem[]>("/audit-logs");
+        const response = await httpClient.get<PaginatedResponse<AuditEvent>>("/api/v1/audit-logs");
+        return response.data;
+    },
+    createDraft: async (applicationId: string, actor = "demo_hr") => {
+        const response = await httpClient.post<DraftRevision>("/api/v1/drafts", {
+            application_id: applicationId,
+            actor,
+        });
+        return response.data;
+    },
+    reviseDraft: async (draftId: string, payload: { subject?: string; editable_content?: string; actor?: string }) => {
+        const response = await httpClient.patch<DraftRevision>(`/api/v1/drafts/${draftId}`, {
+            ...payload,
+            actor: payload.actor ?? "demo_hr",
+        });
+        return response.data;
+    },
+    getDraft: async (draftId: string) => {
+        const response = await httpClient.get<DraftRevision>(`/api/v1/drafts/${draftId}`);
+        return response.data;
+    },
+    getCandidateDrafts: async (candidateId: number) => {
+        const response = await httpClient.get<PaginatedResponse<DraftRevision>>(`/api/v1/candidates/${candidateId}/drafts`);
+        return response.data;
+    },
+    sendDraft: async (draftId: string, actor = "demo_hr") => {
+        const response = await httpClient.post<SendOperation>(`/api/v1/drafts/${draftId}/send`, {
+            actor,
+            confirmation_acknowledged: true,
+        });
+        return response.data;
+    },
+    getSendOperations: async (params: { page?: number; page_size?: number; status?: string; application_id?: string } = {}) => {
+        const response = await httpClient.get<PaginatedResponse<SendOperation>>("/api/v1/send-operations", { params });
+        return response.data;
+    },
+    getSendOperation: async (operationId: string) => {
+        const response = await httpClient.get<SendOperation>(`/api/v1/send-operations/${operationId}`);
+        return response.data;
+    },
+    retrySendOperation: async (operationId: string, actor = "demo_hr") => {
+        const response = await httpClient.post<SendOperation>(`/api/v1/send-operations/${operationId}/retry`, {
+            actor,
+            confirmation_acknowledged: true,
+        });
+        return response.data;
+    },
+    reconcileSendOperation: async (operationId: string, actor = "demo_hr") => {
+        const response = await httpClient.post<SendOperation>(`/api/v1/send-operations/${operationId}/reconcile`, {
+            actor,
+            confirmation_acknowledged: true,
+        });
+        return response.data;
+    },
+    resolveSendOperation: async (operationId: string, payload: { resolution: "PROVIDER_ACCEPTED" | "PROVIDER_NOT_RECEIVED"; rationale: string; warning_acknowledged: boolean; actor?: string }) => {
+        const response = await httpClient.post<SendOperation>(`/api/v1/send-operations/${operationId}/resolve`, {
+            ...payload,
+            actor: payload.actor ?? "demo_hr",
+        });
         return response.data;
     },
 };
