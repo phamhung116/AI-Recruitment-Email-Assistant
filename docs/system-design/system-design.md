@@ -3,8 +3,8 @@
 - **Project**: Recruitment Mail Guard
 - **Document Status**: APPROVED_FOR_HANDOFF
 - **Source Documents & Approval Record**:
-  - Product Spec: `docs/product/product.md` (Approval: `APPROVED_BASELINE_FOR_BA`, Version: 1.0.1, SHA-256: `17b10266e440729d4c55a9e0b1a41ee5c6494700afab3878743df9cdbcff4a6b`)
-  - Business Analysis Spec: `docs/ba/business-analysis.md` (Approval: `READY_FOR_HANDOFF`, Version: 1.2.0-BA, SHA-256: `378e9140fa9bd773d1aa17f3eb3ea52b415a7703ca6384f880ef201d4a9ec802`)
+  - Product Spec: `docs/product/product.md` (Approval: `APPROVED_BASELINE_FOR_BA`, Version: 1.0.1, SHA-256: `316e189df41671e629c9c370a03f39b2068b422dc8d6682a5e3ae0c1707246c7`)
+  - Business Analysis Spec: `docs/ba/business-analysis.md` (Approval: `READY_FOR_HANDOFF`, Version: 1.2.0-BA, SHA-256: `d425d5f0de918d0261974906122dada3834be70cf5ee14bf1041e833eeef97ab`)
 
 ---
 
@@ -460,7 +460,7 @@ flowchart TD
 
 ## 10. User Approval Record
 
-- **User Approval Decision**: APPROVED
+- User Approval Decision: APPROVED
 - **Approval Date**: 2026-08-12
 - **Approved By**: User
 - **Selected Provider**: Resend
