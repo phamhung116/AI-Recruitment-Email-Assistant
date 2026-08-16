@@ -1,380 +1,149 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, MailPlus, Save, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Mail, RefreshCw, Save, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
-import { useParams } from "react-router-dom";
-import { z } from "zod";
+import { Link, useParams } from "react-router-dom";
 
-import { ActivityTimeline } from "@/components/shared/ActivityTimeline";
-import { EmailReviewPanel } from "@/components/shared/EmailReviewPanel";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { LoadingSkeleton } from "@/components/shared/LoadingSkeleton";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { CANDIDATE_STATUSES, isCandidateStatus } from "@/constants/candidateWorkflow";
-import { STATUS_EMAIL_TYPE_MAP } from "@/constants/emailTypes";
 import { QUERY_KEYS } from "@/constants/queryKeys";
-import { CandidateQuickActions } from "@/features/candidates/CandidateQuickActions";
-import { CandidateStatusSelect } from "@/features/candidates/CandidateStatusSelect";
-import { normalizeCandidateUpdatePayload } from "@/features/candidates/candidateForm";
-import { toDateTimeInputValue } from "@/lib/date";
+import { formatDateTime, formatRelativeDateTime } from "@/lib/date";
 import { recruitmentApi } from "@/services/recruitmentApi";
 import { useUiStore } from "@/stores/uiStore";
-import type { Candidate, CandidateStatus, EmailQueueItem } from "@/types/recruitment";
-
-const candidateSchema = z.object({
-    full_name: z.string().min(1, "Candidate name is required"),
-    email: z.string().email("Invalid email").or(z.literal("")).nullable(),
-    phone: z.string().nullable(),
-    position: z.string().nullable(),
-    stage: z.string().nullable(),
-    status: z.enum(CANDIDATE_STATUSES, "Select a supported candidate status"),
-    interview_time: z.string().nullable(),
-    interviewer: z.string().nullable(),
-    note: z.string().nullable(),
-});
-
-type CandidateFormValues = z.infer<typeof candidateSchema>;
+import type { Candidate, DraftRevision } from "@/types/recruitment";
 
 export function CandidateDetailPage() {
-    const params = useParams();
-    const candidateId = Number(params.candidateId);
+    const candidateId = Number(useParams().candidateId);
     const queryClient = useQueryClient();
     const showToast = useUiStore((state) => state.showToast);
-    const [isGenerateOpen, setIsGenerateOpen] = useState(false);
-
+    const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+    const [isSendOpen, setSendOpen] = useState(false);
     const candidateQuery = useQuery({
         queryKey: [...QUERY_KEYS.CANDIDATES, candidateId],
         queryFn: () => recruitmentApi.getCandidate(candidateId),
         enabled: Number.isFinite(candidateId),
     });
-    const historyQuery = useQuery({
-        queryKey: [...QUERY_KEYS.EMAIL_HISTORY, candidateId],
-        queryFn: () => recruitmentApi.getEmailHistory(candidateId),
+    const draftsQuery = useQuery({
+        queryKey: [...QUERY_KEYS.DRAFTS, candidateId],
+        queryFn: () => recruitmentApi.getCandidateDrafts(candidateId),
         enabled: Number.isFinite(candidateId),
     });
-    const form = useForm<CandidateFormValues>({
-        resolver: zodResolver(candidateSchema),
-        defaultValues: toFormValues(candidateQuery.data),
+    const operationsQuery = useQuery({
+        queryKey: [...QUERY_KEYS.SEND_OPERATIONS, candidateQuery.data?.application_id],
+        queryFn: () => recruitmentApi.getSendOperations({ application_id: candidateQuery.data!.application_id, page_size: 100 }),
+        enabled: Boolean(candidateQuery.data?.application_id),
     });
-    const updateMutation = useMutation({
-        mutationFn: (payload: CandidateFormValues) => recruitmentApi.updateCandidate(
-            candidateId,
-            normalizeCandidateUpdatePayload(payload),
-        ),
-        onSuccess: async () => {
-            showToast("Candidate updated", "success");
-            await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CANDIDATES });
-            await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DASHBOARD });
+    const candidate = candidateQuery.data;
+    const drafts = draftsQuery.data?.items ?? [];
+    const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId) ?? drafts[0] ?? null;
+    const selectedOperation = operationsQuery.data?.items.find((operation) => operation.draft_revision_id === selectedDraft?.id);
+
+    useEffect(() => {
+        if (!selectedDraftId && drafts[0]) setSelectedDraftId(drafts[0].id);
+    }, [drafts, selectedDraftId]);
+
+    async function refreshWorkflow() {
+        await Promise.all([
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.DRAFTS }),
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.SEND_OPERATIONS }),
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CANDIDATES }),
+        ]);
+    }
+
+    const generateMutation = useMutation({
+        mutationFn: () => recruitmentApi.createDraft(candidate!.application_id),
+        onSuccess: async (draft) => {
+            showToast("Protected draft generated", "success");
+            await refreshWorkflow();
+            setSelectedDraftId(draft.id);
+        },
+        onError: (error) => showToast(error.message, "error"),
+    });
+    const sendMutation = useMutation({
+        mutationFn: () => recruitmentApi.sendDraft(selectedDraft!.id),
+        onSuccess: async (operation) => {
+            setSendOpen(false);
+            showToast(operation.operation_status === "PROVIDER_ACCEPTED" ? "Email accepted by provider" : `Send result: ${operation.operation_status}`, operation.operation_status === "PROVIDER_ACCEPTED" ? "success" : "warning");
+            await refreshWorkflow();
         },
         onError: (error) => showToast(error.message, "error"),
     });
 
-    useEffect(() => {
-        form.reset(toFormValues(candidateQuery.data));
-    }, [candidateQuery.data, form]);
-
-    if (candidateQuery.isLoading) {
-        return <LoadingSkeleton rows={8} />;
-    }
-
-    if (candidateQuery.error) {
-        return <ErrorState message={candidateQuery.error.message} />;
-    }
-
-    const candidate = candidateQuery.data;
-
-    if (!candidate) {
-        return <ErrorState message="Candidate not found." />;
-    }
+    if (candidateQuery.isLoading || draftsQuery.isLoading) return <LoadingSkeleton rows={8} />;
+    if (candidateQuery.error) return <ErrorState message={candidateQuery.error.message} />;
+    if (!candidate) return <ErrorState message="Candidate not found." />;
 
     return (
         <div className="space-y-6">
             <PageHeader
-                actions={(
-                    <Button onClick={() => setIsGenerateOpen(true)}>
-                        <MailPlus className="h-4 w-4" />
-                        Generate Email Draft
-                    </Button>
-                )}
-                description="Review profile, update recruitment status, and manage email touchpoints."
+                actions={<Button asChild variant="secondary"><Link to="/candidates"><ArrowLeft className="h-4 w-4" />Candidates</Link></Button>}
+                description={`${candidate.application_id} · ${candidate.position || "Position not specified"}`}
                 title={candidate.full_name}
             />
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.72fr)]">
                 <div className="space-y-6">
+                    <CandidateCard candidate={candidate} />
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Candidate Information</CardTitle>
-                            <CardDescription>Core recruiting data synchronized with the backend API.</CardDescription>
-                        </CardHeader>
+                        <CardHeader><CardTitle>Draft Revisions</CardTitle><CardDescription>Decision-critical wording is protected by backend policy.</CardDescription></CardHeader>
                         <CardContent>
-                            <form className="grid gap-4 md:grid-cols-2" onSubmit={form.handleSubmit((values) => updateMutation.mutate(values))}>
-                                <FormInput control={form.control} label="Name" name="full_name" />
-                                <FormInput control={form.control} label="Email" name="email" />
-                                <FormInput control={form.control} label="Phone" name="phone" />
-                                <FormInput control={form.control} label="Position" name="position" />
-                                <FormInput control={form.control} label="Stage" name="stage" />
-                                <Controller
-                                    control={form.control}
-                                    name="status"
-                                    render={({ field, fieldState }) => (
-                                        <div>
-                                            <CandidateStatusSelect
-                                                id="candidate-status"
-                                                onChange={field.onChange}
-                                                value={field.value}
-                                            />
-                                            {fieldState.error && <p className="mt-2 text-xs text-red-600">{fieldState.error.message}</p>}
-                                        </div>
-                                    )}
-                                />
-                                <FormInput control={form.control} label="Interviewer" name="interviewer" />
-                                <FormInput control={form.control} label="Interview Time" name="interview_time" type="datetime-local" />
-                                <div className="md:col-span-2">
-                                    <Controller
-                                        control={form.control}
-                                        name="note"
-                                        render={({ field }) => (
-                                            <div className="space-y-2">
-                                                <Label htmlFor="candidate-notes">Notes</Label>
-                                                <Textarea
-                                                    className="min-h-44"
-                                                    id="candidate-notes"
-                                                    placeholder="Add context, follow-up notes, and recruiter observations..."
-                                                    {...field}
-                                                    value={field.value || ""}
-                                                />
-                                                <p className="text-xs text-slate-500">Autosave UI placeholder. Click Save to persist in this MVP.</p>
-                                            </div>
-                                        )}
-                                    />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <Button disabled={updateMutation.isPending} type="submit">
-                                        <Save className="h-4 w-4" />
-                                        Save Changes
-                                    </Button>
-                                </div>
-                            </form>
+                            {drafts.length === 0 ? <EmptyState actionLabel="Generate Draft" description="Create a fixed-template draft and run deterministic safety checks." icon={Mail} onAction={() => generateMutation.mutate()} title="No draft revisions" /> : (
+                                <div className="space-y-2">{drafts.map((draft) => <button className={`flex w-full items-center justify-between rounded-md border p-3 text-left ${selectedDraft?.id === draft.id ? "border-primary-200 bg-primary-50" : "border-border hover:bg-muted"}`} key={draft.id} onClick={() => setSelectedDraftId(draft.id)} type="button"><div><p className="font-medium">Revision {draft.revision_number} · {draft.template_code}</p><p className="mt-1 text-xs text-muted-foreground">{formatRelativeDateTime(draft.created_at)} by {draft.created_by}</p></div><StatusBadge value={draft.status} /></button>)}</div>
+                            )}
                         </CardContent>
                     </Card>
                 </div>
                 <div className="space-y-6">
-                    <CandidateQuickActions
-                        candidate={candidate}
-                        onGenerateDraft={() => setIsGenerateOpen(true)}
-                    />
+                    {selectedDraft ? <DraftInspector draft={selectedDraft} operationStatus={selectedOperation?.operation_status} onRevised={async (draft) => { await refreshWorkflow(); setSelectedDraftId(draft.id); }} /> : null}
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Email History Timeline</CardTitle>
-                            <CardDescription>Messages sent to this candidate.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <ActivityTimeline
-                                items={(historyQuery.data || []).map((item) => ({
-                                    title: item.email_type,
-                                    description: item.subject,
-                                    status: "SENT",
-                                    time: item.sent_at,
-                                }))}
-                            />
+                        <CardHeader><CardTitle>Quick Actions</CardTitle><CardDescription>All provider actions are single-candidate and explicitly confirmed.</CardDescription></CardHeader>
+                        <CardContent className="grid gap-2">
+                            <Button disabled={generateMutation.isPending} onClick={() => generateMutation.mutate()} variant="secondary"><RefreshCw className="h-4 w-4" />Generate New Revision</Button>
+                            <Button disabled={!selectedDraft || !["READY_TO_SEND", "CORRECTION_DRAFT"].includes(selectedDraft.status) || Boolean(selectedOperation) || sendMutation.isPending} onClick={() => setSendOpen(true)}><ShieldCheck className="h-4 w-4" />Send Real Email</Button>
+                            {selectedOperation && <div className="rounded-md border border-border bg-muted/40 p-3 text-sm"><p className="font-medium">Provider operation</p><div className="mt-2"><StatusBadge value={selectedOperation.operation_status} /></div><p className="mt-2 text-xs text-muted-foreground">Provider accepted means request accepted, not guaranteed inbox delivery.</p></div>}
                         </CardContent>
                     </Card>
                 </div>
             </div>
-            <GenerateEmailDialog
-                candidate={candidate}
-                isOpen={isGenerateOpen}
-                onOpenChange={setIsGenerateOpen}
+            <ConfirmDialog
+                confirmLabel={sendMutation.isPending ? "Sending..." : "Send Real Email"}
+                description={`This will send a real ${selectedDraft?.template_code ?? "recruitment"} email to ${candidate.email}. Verify recipient, subject, decision and body before continuing.`}
+                isOpen={isSendOpen}
+                onConfirm={() => selectedDraft && sendMutation.mutate()}
+                onOpenChange={setSendOpen}
+                title="Send this email through Resend?"
             />
         </div>
     );
 }
 
-function FormInput({ control, label, name, type = "text" }: { control: ReturnType<typeof useForm<CandidateFormValues>>["control"]; label: string; name: keyof CandidateFormValues; type?: string }) {
-    const inputId = `candidate-${name}`;
-
-    return (
-        <Controller
-            control={control}
-            name={name}
-            render={({ field, fieldState }) => (
-                <div className="space-y-2">
-                    <Label htmlFor={inputId}>{label}</Label>
-                    <Input
-                        id={inputId}
-                        type={type}
-                        {...field}
-                        value={type === "datetime-local" ? toDateTimeInputValue(field.value) : field.value || ""}
-                        onChange={(event) => field.onChange(type === "datetime-local" && event.target.value ? new Date(event.target.value).toISOString() : event.target.value)}
-                    />
-                    {fieldState.error && <p className="text-xs text-red-600">{fieldState.error.message}</p>}
-                </div>
-            )}
-        />
-    );
+function CandidateCard({ candidate }: { candidate: Candidate }) {
+    return <Card><CardHeader><div className="flex items-start justify-between gap-4"><div><CardTitle>Candidate Information</CardTitle><CardDescription>Source application data is read-only in this delivery workflow.</CardDescription></div><StatusBadge value={candidate.status} /></div></CardHeader><CardContent className="grid gap-4 sm:grid-cols-2"><Info label="Email" value={candidate.email || "-"} /><Info label="Phone" value={candidate.phone || "-"} /><Info label="Position" value={candidate.position || "-"} /><Info label="Stage" value={candidate.stage || "-"} /><Info label="Applied" value={formatDateTime(candidate.created_at)} /><Info label="Communicated outcome" value={candidate.communicated_decision || "Not communicated"} /></CardContent></Card>;
 }
 
-function GenerateEmailDialog({ candidate, isOpen, onOpenChange }: { candidate: Candidate; isOpen: boolean; onOpenChange: (isOpen: boolean) => void }) {
-    const queryClient = useQueryClient();
+function DraftInspector({ draft, onRevised, operationStatus }: { draft: DraftRevision; onRevised: (draft: DraftRevision) => void; operationStatus?: string }) {
     const showToast = useUiStore((state) => state.showToast);
-    const [step, setStep] = useState(1);
-    const [draft, setDraft] = useState<EmailQueueItem | null>(null);
-    const selectedEmailType = STATUS_EMAIL_TYPE_MAP[candidate.status as CandidateStatus];
-    const templatesQuery = useQuery({
-        enabled: isOpen,
-        queryKey: QUERY_KEYS.EMAIL_TEMPLATES,
-        queryFn: recruitmentApi.getTemplates,
-    });
-    const mutation = useMutation({
-        mutationFn: () => recruitmentApi.generateDraft(candidate.id, selectedEmailType),
-        onSuccess: async (item) => {
-            setDraft(item);
-            setStep(3);
-            showToast("Email draft generated", "success");
-            await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.EMAIL_QUEUE });
-        },
+    const [subject, setSubject] = useState(draft.subject);
+    const [editableContent, setEditableContent] = useState(draft.editable_content);
+    useEffect(() => { setSubject(draft.subject); setEditableContent(draft.editable_content); }, [draft]);
+    const isEditable = ["READY_TO_SEND", "DRAFT_PENDING_CHECK", "BLOCKED_DETERMINISTIC"].includes(draft.status) && !operationStatus;
+    const isDirty = subject !== draft.subject || editableContent !== draft.editable_content;
+    const reviseMutation = useMutation({
+        mutationFn: () => recruitmentApi.reviseDraft(draft.id, { subject, editable_content: editableContent }),
+        onSuccess: (revision) => { showToast("New draft revision saved", "success"); onRevised(revision); },
         onError: (error) => showToast(error.message, "error"),
     });
-    const selectedTemplate = useMemo(() => {
-        return (templatesQuery.data || []).find((template) => template.email_type === selectedEmailType);
-    }, [selectedEmailType, templatesQuery.data]);
-
-    function handleContinue() {
-        if (step === 1) {
-            if (!selectedEmailType) {
-                showToast("This candidate status does not allow an email draft yet", "warning");
-                return;
-            }
-            setStep(2);
-            return;
-        }
-
-        mutation.mutate();
-    }
-
-    function handleOpenChange(nextIsOpen: boolean) {
-        if (!nextIsOpen) {
-            setStep(1);
-            setDraft(null);
-        }
-        onOpenChange(nextIsOpen);
-    }
-
-    return (
-        <Dialog onOpenChange={handleOpenChange} open={isOpen}>
-            <DialogContent className="max-h-[calc(100vh-2rem)] max-w-3xl overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>Generate Email Draft</DialogTitle>
-                    <DialogDescription>Three-step workflow for safe AI-assisted email drafting.</DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4">
-                    <StepIndicator step={step} />
-                    {step === 1 && (
-                        <div className="space-y-3">
-                            <p className="text-sm text-muted-foreground">The backend policy maps candidate status to one allowed email type. AI cannot change this decision.</p>
-                            <div className="grid items-center gap-3 rounded-lg border border-border bg-muted/40 p-4 sm:grid-cols-[1fr_auto_1fr]">
-                                <div>
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Candidate status</p>
-                                    <div className="mt-2"><StatusBadge value={candidate.status} /></div>
-                                </div>
-                                <ArrowRight className="hidden h-5 w-5 text-muted-foreground sm:block" />
-                                <div>
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Allowed email</p>
-                                    <p className="mt-2 text-sm font-semibold text-card-foreground">{selectedEmailType || "No email allowed"}</p>
-                                </div>
-                            </div>
-                            {!selectedEmailType && (
-                                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                                    HR must record a supported recruitment decision before generating an outcome email.
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    {step === 2 && (
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-2 text-sm font-medium text-card-foreground">
-                                <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                                Verified template selected by backend policy
-                            </div>
-                            {templatesQuery.isLoading && <LoadingSkeleton rows={3} />}
-                            {templatesQuery.error && <ErrorState message={templatesQuery.error.message} />}
-                            {selectedTemplate && (
-                                <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{selectedTemplate.name}</p>
-                                    <p className="mt-2 font-medium text-card-foreground">{selectedTemplate.subject}</p>
-                                    <p className="mt-2 whitespace-pre-wrap leading-6 text-muted-foreground">{selectedTemplate.body}</p>
-                                </div>
-                            )}
-                            {!templatesQuery.isLoading && !templatesQuery.error && !selectedTemplate && (
-                                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">No verified template exists for {selectedEmailType}. Draft generation is unavailable.</div>
-                            )}
-                        </div>
-                    )}
-                    {step === 3 && draft && (
-                        <div className="space-y-4">
-                            <div className="rounded-lg border border-border bg-card p-4">
-                                <div>
-                                    <p className="text-xs font-medium uppercase text-muted-foreground">Subject</p>
-                                    <p className="mt-1 font-medium text-card-foreground">{draft.subject}</p>
-                                </div>
-                                <div className="mt-4">
-                                    <p className="text-xs font-medium uppercase text-muted-foreground">Email body</p>
-                                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-card-foreground/80">{draft.body}</p>
-                                </div>
-                            </div>
-                            <EmailReviewPanel currentBody={draft.body} currentSubject={draft.subject} riskResult={draft.risk_check_result} />
-                            <p className="text-xs text-muted-foreground">The draft has already been added to Email Queue. Open it there to edit, review, approve, or simulate sending.</p>
-                        </div>
-                    )}
-                </div>
-                <DialogFooter>
-                    <Button onClick={() => handleOpenChange(false)} variant="secondary">Close</Button>
-                    {step > 1 && step < 3 && <Button onClick={() => setStep(step - 1)} variant="secondary">Back</Button>}
-                    {step < 3 && <Button disabled={mutation.isPending || !selectedEmailType || (step === 2 && !selectedTemplate)} onClick={handleContinue}>{mutation.isPending ? "Generating..." : "Continue"}</Button>}
-                    {step === 3 && <Button onClick={() => handleOpenChange(false)}>Done</Button>}
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
+    const issues = useMemo(() => Array.isArray(draft.risk_check_result.issues) ? draft.risk_check_result.issues : [], [draft.risk_check_result.issues]);
+    return <Card><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle>Email Preview</CardTitle><CardDescription>{draft.template_code} · Revision {draft.revision_number}</CardDescription></div><StatusBadge value={draft.status} /></div></CardHeader><CardContent className="space-y-4"><div className="space-y-2"><Label htmlFor="draft-subject">Subject</Label><Input disabled={!isEditable} id="draft-subject" onChange={(event) => setSubject(event.target.value)} value={subject} /></div><div className="space-y-2"><Label>Protected decision content</Label><div className="rounded-md border border-border bg-muted/60 p-3 text-sm leading-6">{draft.decision_critical_content}</div></div><div className="space-y-2"><Label htmlFor="draft-editable">Editable greeting and notes</Label><Textarea className="min-h-44" disabled={!isEditable} id="draft-editable" onChange={(event) => setEditableContent(event.target.value)} value={editableContent} /></div>{issues.length > 0 && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">{issues.map((issue, index) => <p key={index}>{issue.message}</p>)}</div>}<Button disabled={!isDirty || reviseMutation.isPending} onClick={() => reviseMutation.mutate()} variant="secondary"><Save className="h-4 w-4" />Save as New Revision</Button></CardContent></Card>;
 }
 
-function StepIndicator({ step }: { step: number }) {
-    return (
-        <div className="grid grid-cols-3 gap-2">
-            {["Policy mapping", "Verified template", "Safety review"].map((label, index) => (
-                <div className={`rounded-md border px-3 py-2 text-sm ${step === index + 1 ? "border-primary-200 bg-primary-50 text-primary-900" : "border-slate-200 bg-slate-50 text-slate-500"}`} key={label}>
-                    {index + 1}. {label}
-                </div>
-            ))}
-        </div>
-    );
-}
-
-function toFormValues(candidate?: Candidate): CandidateFormValues {
-    return {
-        full_name: candidate?.full_name || "",
-        email: candidate?.email || "",
-        phone: candidate?.phone || "",
-        position: candidate?.position || "",
-        stage: candidate?.stage || "",
-        status: candidate && isCandidateStatus(candidate.status) ? candidate.status : "PENDING",
-        interview_time: candidate?.interview_time || "",
-        interviewer: candidate?.interviewer || "",
-        note: candidate?.note || "",
-    };
+function Info({ label, value }: { label: string; value: string }) {
+    return <div><p className="text-xs font-medium uppercase text-muted-foreground">{label}</p><p className="mt-1 text-sm font-medium text-card-foreground">{value}</p></div>;
 }

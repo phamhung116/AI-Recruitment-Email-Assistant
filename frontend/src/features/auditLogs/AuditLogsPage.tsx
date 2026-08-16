@@ -11,7 +11,7 @@ import { SearchFilterBar } from "@/components/shared/SearchFilterBar";
 import { QUERY_KEYS } from "@/constants/queryKeys";
 import { formatRelativeDateTime } from "@/lib/date";
 import { recruitmentApi } from "@/services/recruitmentApi";
-import type { AuditLogItem } from "@/types/recruitment";
+import type { AuditEvent } from "@/types/recruitment";
 
 export function AuditLogsPage() {
     const [search, setSearch] = useState("");
@@ -21,26 +21,26 @@ export function AuditLogsPage() {
         retry: false,
     });
     const filteredLogs = useMemo(() => {
-        return (auditQuery.data || []).filter((item) => {
-            const text = `${item.action} ${item.actor || ""} ${item.entity_type || ""} ${JSON.stringify(item.metadata_json)}`;
+        return (auditQuery.data?.items || []).filter((item) => {
+            const text = `${item.event_name} ${item.actor} ${item.entity_type} ${JSON.stringify(item.payload_json)}`;
             return !search || text.toLowerCase().includes(search.toLowerCase());
         });
     }, [auditQuery.data, search]);
-    const columns: DataTableColumn<AuditLogItem>[] = [
+    const columns: DataTableColumn<AuditEvent>[] = [
         {
             key: "action",
             header: "Action",
-            render: (item) => <span className="font-medium text-slate-950">{item.action}</span>,
+            render: (item) => <span className="font-medium text-slate-950">{item.event_name}</span>,
         },
         {
             key: "user",
             header: "User",
-            render: (item) => item.actor || "System",
+            render: (item) => item.actor,
         },
         {
             key: "entity",
             header: "Entity",
-            render: (item) => `${item.entity_type || "-"} #${item.entity_id || "-"}`,
+            render: (item) => `${item.entity_type} #${item.entity_id}`,
         },
         {
             key: "timestamp",
@@ -52,7 +52,7 @@ export function AuditLogsPage() {
             header: "Detail",
             render: (item) => (
                 <code className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">
-                    {JSON.stringify(item.metadata_json)}
+                    {JSON.stringify(item.payload_json)}
                 </code>
             ),
         },
@@ -61,7 +61,7 @@ export function AuditLogsPage() {
     return (
         <div className="space-y-6">
             <PageHeader
-                description="System-level activity log for generation, Agent review, approvals, simulations, cancellations, and candidate updates."
+                description="Immutable event trail for imports, protected drafts, provider sends and governed resolutions."
                 title="Audit Logs"
             />
             <SearchFilterBar
@@ -69,7 +69,7 @@ export function AuditLogsPage() {
                 searchPlaceholder="Search action, user, entity, detail..."
                 searchValue={search}
             />
-            {auditQuery.error && <ErrorState message={`${auditQuery.error.message} The frontend is ready for /audit-logs once the backend exposes it.`} />}
+            {auditQuery.error && <ErrorState message={auditQuery.error.message} />}
             {auditQuery.isLoading ? (
                 <LoadingSkeleton rows={8} />
             ) : (

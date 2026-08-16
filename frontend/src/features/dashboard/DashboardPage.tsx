@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, FlaskConical, Inbox, MailCheck, Users } from "lucide-react";
+import { AlertTriangle, Inbox, MailCheck, Send, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import {
     Bar,
@@ -36,8 +36,8 @@ export function DashboardPage() {
         queryFn: () => recruitmentApi.getCandidates(),
     });
     const queueQuery = useQuery({
-        queryKey: QUERY_KEYS.EMAIL_QUEUE,
-        queryFn: recruitmentApi.getEmailQueue,
+        queryKey: QUERY_KEYS.SEND_OPERATIONS,
+        queryFn: () => recruitmentApi.getSendOperations({ page_size: 100 }),
     });
     const auditQuery = useQuery({
         queryKey: QUERY_KEYS.AUDIT_LOGS,
@@ -56,13 +56,13 @@ export function DashboardPage() {
     ).map(([name, value]) => ({ name, value }));
 
     const queueStatusData = Object.entries(
-        (queueQuery.data || []).reduce<Record<string, number>>((result, item) => {
-            result[item.status] = (result[item.status] || 0) + 1;
+        (queueQuery.data?.items || []).reduce<Record<string, number>>((result, item) => {
+            result[item.operation_status] = (result[item.operation_status] || 0) + 1;
             return result;
         }, {}),
     ).map(([name, value]) => ({ name, value }));
 
-    const emailActivityData = buildEmailActivityData(queueQuery.data || []);
+    const emailActivityData = buildEmailActivityData(queueQuery.data?.items || []);
 
     return (
         <div className="space-y-6">
@@ -84,7 +84,7 @@ export function DashboardPage() {
                             value={statsQuery.data?.total_candidates || 0}
                         />
                         <KPIStatCard
-                            description="Drafts and approvals waiting"
+                            description="In-flight or delivery unknown"
                             icon={Inbox}
                             label="Pending Emails"
                             trend="Review"
@@ -92,13 +92,13 @@ export function DashboardPage() {
                         />
                         <KPIStatCard
                             description="Recorded demo deliveries"
-                            icon={FlaskConical}
-                            label="Simulated Sends"
+                            icon={Send}
+                            label="Provider Accepted"
                             trend="+0.0%"
                             value={statsQuery.data?.sent_emails || 0}
                         />
                         <KPIStatCard
-                            description="Simulation needs investigation"
+                            description="Provider failures requiring review"
                             icon={AlertTriangle}
                             label="Failed Emails"
                             trend="Watch"
@@ -117,7 +117,7 @@ export function DashboardPage() {
                                 </BarChart>
                             </ResponsiveContainer>
                         </ChartCard>
-                        <ChartCard description="Operational queue distribution." title="Email Queue Status">
+                        <ChartCard description="Real provider operation distribution." title="Email Operation Status">
                             <ResponsiveContainer height={260} width="100%">
                                 <PieChart>
                                     <Pie data={queueStatusData} dataKey="value" innerRadius={58} nameKey="name" outerRadius={92}>
@@ -151,9 +151,9 @@ export function DashboardPage() {
                         </CardHeader>
                         <CardContent>
                             <ActivityTimeline
-                                items={(auditQuery.data || []).slice(0, 6).map((item) => ({
-                                    title: item.action,
-                                    description: `${item.entity_type || "entity"} #${item.entity_id || "-"}`,
+                                items={(auditQuery.data?.items || []).slice(0, 6).map((item) => ({
+                                    title: item.event_name,
+                                    description: `${item.entity_type} #${item.entity_id}`,
                                     time: item.created_at,
                                     status: item.actor || "System",
                                 }))}

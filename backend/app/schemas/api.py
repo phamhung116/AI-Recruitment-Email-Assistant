@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -190,3 +191,168 @@ class ImportPreviewResult(BaseModel):
     valid_rows: int
     invalid_rows: int
     rows: list[ImportPreviewRow]
+
+
+class ApiErrorResponse(BaseModel):
+    error_code: str
+    message: str
+    details: dict[str, Any] = Field(default_factory=dict)
+    timestamp: datetime
+    request_id: UUID
+
+
+class CandidateV1Read(BaseModel):
+    id: int
+    application_id: str
+    full_name: str
+    email: str
+    phone: str | None
+    position: str | None
+    stage: str
+    status: str
+    communicated_decision: str | None
+    communicated_stage: str | None
+    communicated_at: datetime | None
+    status_updated_at: datetime | None
+    status_updated_by: str | None
+    interview_time: datetime | None
+    interviewer: str | None
+    note: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CandidateV1ListResponse(BaseModel):
+    items: list[CandidateV1Read]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class DraftCreateRequest(BaseModel):
+    application_id: str = Field(min_length=1, max_length=64)
+    actor: str = Field(default="demo_hr", min_length=1, max_length=255)
+
+
+class DraftReviseRequest(BaseModel):
+    subject: str | None = Field(default=None, max_length=500)
+    editable_content: str | None = None
+    actor: str = Field(default="demo_hr", min_length=1, max_length=255)
+
+
+class CorrectionDraftRequest(BaseModel):
+    new_decision: str
+    rationale: str = Field(min_length=5)
+    actor: str = Field(default="demo_hr", min_length=1, max_length=255)
+
+
+class DraftRevisionRead(BaseModel):
+    id: UUID
+    candidate_id: int
+    revision_number: int
+    template_code: str
+    stage: str
+    decision: str
+    to_email: str
+    subject: str
+    decision_critical_content: str
+    editable_content: str
+    rendered_body: str
+    status: str
+    is_correction: bool
+    correction_rationale: str | None
+    prior_operation_id: UUID | None
+    risk_check_result: dict[str, Any]
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DraftRevisionListResponse(BaseModel):
+    items: list[DraftRevisionRead]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class SendConfirmationRequest(BaseModel):
+    actor: str = Field(default="demo_hr", min_length=1, max_length=255)
+    confirmation_acknowledged: bool
+
+
+class DeliveryResolutionRequest(BaseModel):
+    resolution: str
+    rationale: str = Field(min_length=5)
+    actor: str = Field(min_length=1, max_length=255)
+    warning_acknowledged: bool
+
+
+class ProviderAttemptRead(BaseModel):
+    id: UUID
+    attempt_number: int
+    attempt_status: str
+    http_status_code: int | None
+    provider_message_id: str | None
+    error_code: str | None
+    error_message: str | None
+    latency_ms: int | None
+    initiated_at: datetime
+    completed_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SendOperationRead(BaseModel):
+    id: UUID
+    draft_revision_id: UUID
+    operation_status: str
+    provider_name: str
+    provider_message_id: str | None
+    final_outcome: str | None
+    failure_category: str | None
+    resolution_mode: str | None
+    resolution_rationale: str | None
+    resolved_by: str | None
+    resolved_at: datetime | None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+    attempts: list[ProviderAttemptRead] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SendOperationListResponse(BaseModel):
+    items: list[SendOperationRead]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class AuditLogV1Read(BaseModel):
+    id: int
+    event_name: str
+    entity_type: str
+    entity_id: str
+    application_id: str | None
+    actor: str
+    action_outcome: str
+    payload_json: dict[str, Any]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuditLogV1ListResponse(BaseModel):
+    items: list[AuditLogV1Read]
+    total: int
+    page: int
+    page_size: int
+    pages: int

@@ -4,50 +4,56 @@ services:
     container_name: ai-recruitment-email-assistant-db
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: ai_recruitment_email_assistant
+      POSTGRES_PASSWORD: "1162004"
+      POSTGRES_DB: HiLab_Email
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - hilab_email_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_recruitment_email_assistant"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d HiLab_Email"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  rabbitmq:
-    image: rabbitmq:4-management-alpine
-    container_name: ai-recruitment-email-assistant-rabbitmq
+  backend:
+    build:
+      context: ./backend
+    container_name: ai-recruitment-email-assistant-api
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      DATABASE_URL: postgresql+psycopg2://postgres:1162004@postgres:5432/HiLab_Email
+      BACKEND_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      BACKEND_HOST: 0.0.0.0
+      BACKEND_PORT: 8000
+      ENVIRONMENT: development
+      LOG_LEVEL: INFO
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_SENDER_ADDRESS: ${EMAIL_SENDER_ADDRESS:-onboarding@resend.dev}
+      EMAIL_SENDER_NAME: ${EMAIL_SENDER_NAME:-Recruitment Team}
+      RESEND_CONNECT_TIMEOUT_SECONDS: 5
+      RESEND_READ_TIMEOUT_SECONDS: 10
     ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 5s
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()\""]
+      interval: 10s
       timeout: 5s
       retries: 12
 
-  redis:
-    image: redis:7-alpine
-    container_name: ai-recruitment-email-assistant-redis
-    command: ["redis-server", "--appendonly", "yes"]
+  frontend:
+    build:
+      context: ./frontend
+    container_name: ai-recruitment-email-assistant-web
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
     ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
 
 volumes:
-  postgres_data:
-  rabbitmq_data:
-  redis_data:
+  hilab_email_postgres_data:

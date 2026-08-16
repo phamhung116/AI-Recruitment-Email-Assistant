@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     resend_api_key: SecretStr | None = None
     email_sender_address: str = "onboarding@resend.dev"
     email_sender_name: str = "Recruitment Team"
+    resend_connect_timeout_seconds: float = Field(default=5.0, ge=1.0, le=30.0)
+    resend_read_timeout_seconds: float = Field(default=10.0, ge=1.0, le=60.0)
 
     # Transitional compatibility for legacy review modules. These settings are
     # not part of the target MVP runtime and are removed with SLICE-019.

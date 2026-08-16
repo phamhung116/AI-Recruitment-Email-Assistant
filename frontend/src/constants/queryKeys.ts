@@ -5,4 +5,6 @@ export const QUERY_KEYS = {
     EMAIL_HISTORY: ["emailHistory"],
     EMAIL_QUEUE: ["emailQueue"],
     EMAIL_TEMPLATES: ["emailTemplates"],
+    DRAFTS: ["drafts"],
+    SEND_OPERATIONS: ["sendOperations"],
 } as const;

@@ -1,9 +1,7 @@
 import {
     Activity,
     BarChart3,
-    History,
     Inbox,
-    MailCheck,
     UserRoundSearch,
 } from "lucide-react";
 
@@ -19,19 +17,9 @@ export const NAVIGATION_ITEMS = [
         icon: UserRoundSearch,
     },
     {
-        title: "Email Templates",
-        href: "/email-templates",
-        icon: MailCheck,
-    },
-    {
-        title: "Email Queue",
-        href: "/email-queue",
+        title: "Email Operations",
+        href: "/email-operations",
         icon: Inbox,
-    },
-    {
-        title: "Email History",
-        href: "/email-history",
-        icon: History,
     },
     {
         title: "Audit Logs",

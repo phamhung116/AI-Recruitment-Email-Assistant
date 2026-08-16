@@ -10,6 +10,8 @@ def test_settings_have_safe_runtime_defaults() -> None:
     assert settings.backend_port == 8000
     assert settings.environment == "development"
     assert settings.email_sender_address == "onboarding@resend.dev"
+    assert settings.resend_connect_timeout_seconds == 5.0
+    assert settings.resend_read_timeout_seconds == 10.0
     assert settings.cors_origins == [
         "http://localhost:5173",
         "http://127.0.0.1:5173",

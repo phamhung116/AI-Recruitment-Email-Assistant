@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Candidate, CandidateStatus, RecruitmentStage
 from app.schemas import ImportPreviewResult, ImportPreviewRow, ImportResult
+from app.services.audit_service import AuditEvent, append_audit_event
 
 
 HEADER_ERROR_CODE = "CANDIDATE_HEADER_INVALID"
@@ -90,7 +91,22 @@ async def import_candidates_from_excel(
             errors.append(f"Row {row.row_number}: {row.reason}")
             continue
 
-        db.add(create_candidate_from_payload(row.candidate))
+        candidate = create_candidate_from_payload(row.candidate)
+        db.add(candidate)
+        db.flush()
+        append_audit_event(
+            db,
+            event=AuditEvent.CANDIDATE_IMPORTED,
+            entity_type="CANDIDATE",
+            entity_id=candidate.id,
+            application_id=candidate.application_id,
+            actor="demo_hr",
+            payload={
+                "row_number": row.row_number,
+                "stage": candidate.stage,
+                "status": candidate.status,
+            },
+        )
         imported_count += 1
 
     try:

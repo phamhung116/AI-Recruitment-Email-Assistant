@@ -4,29 +4,29 @@
 Thiết lập kế hoạch triển khai Backend toàn diện cho hệ thống **Recruitment Mail Guard (Minimal Real-Email MVP)** dựa trên các đặc tả đã duyệt (Product Specification v1.0.1, Business Analysis v1.2.0-BA, System Design ADR-001..007, Database Specification v1.0.0-DB). Kế hoạch này được chuẩn bị ở chế độ `PLAN_ONLY` để cung cấp lộ trình thực thi theo Vertical Slices chi tiết, an toàn, có thể kiểm thử và truy vết cho Coding Agent tiếp theo.
 
 ## Status
-IN_PROGRESS
+COMPLETED
 
 ## Inputs
 | Input Document | Canonical Path | Required / Optional | Approval State | Fingerprint (SHA-256) |
 | :--- | :--- | :--- | :--- | :--- |
-| Product Spec | `docs/product/product.md` | Required | APPROVED | `316e189df41671e629c9c370a03f39b2068b422dc8d6682a5e3ae0c1707246c7` |
+| Product Spec | `docs/product/product.md` | Required | APPROVED_FOR_DELIVERY | `667ee99f494a4cf55f18914b7d2e25dce818c2716a443b235346ede1e7cbf5e4` |
 | Business Analysis | `docs/ba/business-analysis.md` | Required | APPROVED | `d425d5f0de918d0261974906122dada3834be70cf5ee14bf1041e833eeef97ab` |
 | BA Traceability | `docs/ba/requirements-traceability.md` | Optional | APPROVED | `1926a124ca2918fc4754bc681237105c410773e7f793f9fd2f6d347636ce00b3` |
 | System Design | `docs/system-design/system-design.md` | Required | APPROVED | `e684be53a735d86d7ded34368052abadea01990920b32d3331585072e3b6c1cc` |
 | SD Traceability | `docs/system-design/traceability.md` | Optional | APPROVED | `3d74468b73135f5ea3f91771a599c18bc4074de43e5023b5b8c34afca4e16f62` |
-| Database Spec | `docs/database/database.md` | Required | APPROVED | `3b3782d15e8dfcc14536af9d57597415a46f46ba5dc1aadb32651195af308e19` |
-| Data Dictionary | `docs/database/data-dictionary.md` | Optional | DRAFT_OR_UNAPPROVED | `67312d9cc6a4a0c1f3aab9215c0f8f7154828ffa49d5fd8045c4b49fadafd8ee` |
-| DB Traceability | `docs/database/traceability.md` | Optional | DRAFT_OR_UNAPPROVED | `2fe4aa3296ef3cbda2b3a7686776210b10a5d2d6ff87012d9db18eb38e9492e8` |
+| Database Spec | `docs/database/database.md` | Required | READY_FOR_REVIEW | `d29f5ee5fd86d7eebbca877be436961e8cb946c10d07e6184103d547f02ae744` |
+| Data Dictionary | `docs/database/data-dictionary.md` | Optional | DRAFT_OR_UNAPPROVED | `cd2bc119e26c2e865f3553c6faee9f3b04fc0f98d03fd77f2ebfee6ce84a072e` |
+| DB Traceability | `docs/database/traceability.md` | Optional | DRAFT_OR_UNAPPROVED | `532024f969bf2255f8fd3ffc41018b76696c5c40ddce218f245e9eca90f24ad1` |
 
 ## Input Fingerprints
-- `docs/product/product.md`: `316e189df41671e629c9c370a03f39b2068b422dc8d6682a5e3ae0c1707246c7`
+- `docs/product/product.md`: `667ee99f494a4cf55f18914b7d2e25dce818c2716a443b235346ede1e7cbf5e4`
 - `docs/ba/business-analysis.md`: `d425d5f0de918d0261974906122dada3834be70cf5ee14bf1041e833eeef97ab`
 - `docs/ba/requirements-traceability.md`: `1926a124ca2918fc4754bc681237105c410773e7f793f9fd2f6d347636ce00b3`
 - `docs/system-design/system-design.md`: `e684be53a735d86d7ded34368052abadea01990920b32d3331585072e3b6c1cc`
 - `docs/system-design/traceability.md`: `3d74468b73135f5ea3f91771a599c18bc4074de43e5023b5b8c34afca4e16f62`
-- `docs/database/database.md`: `3b3782d15e8dfcc14536af9d57597415a46f46ba5dc1aadb32651195af308e19`
-- `docs/database/data-dictionary.md`: `67312d9cc6a4a0c1f3aab9215c0f8f7154828ffa49d5fd8045c4b49fadafd8ee`
-- `docs/database/traceability.md`: `2fe4aa3296ef3cbda2b3a7686776210b10a5d2d6ff87012d9db18eb38e9492e8`
+- `docs/database/database.md`: `d29f5ee5fd86d7eebbca877be436961e8cb946c10d07e6184103d547f02ae744`
+- `docs/database/data-dictionary.md`: `cd2bc119e26c2e865f3553c6faee9f3b04fc0f98d03fd77f2ebfee6ce84a072e`
+- `docs/database/traceability.md`: `532024f969bf2255f8fd3ffc41018b76696c5c40ddce218f245e9eca90f24ad1`
 
 ## Current-State Findings
 Khảo sát hiện trạng codebase tại `backend/`:
@@ -361,48 +361,56 @@ Khảo sát hiện trạng codebase tại `backend/`:
 ### Slice SLICE-011: Logical Send Operation & Concurrency Guard
 - **Requirement Sources**: `CAP-007`, `FR-005`, `NFR-003`, `BR-013`, `ADR-003`, `DEC-004`
 - **Dependencies**: `SLICE-009`
-- **Status**: pending
+- **Status**: completed
 - **Acceptance Criteria**:
   - Khởi tạo bản ghi `LogicalSendOperation` ràng buộc 1:1 với `draft_revisions.id`.
   - Sử dụng database unique constraint và row-level lock để ngăn chặn double-click gửi trùng.
 - **Expected Files**:
   - `backend/app/services/send_orchestrator.py` (NEW)
-- **Actual Changed Files**: None
+- **Actual Changed Files**:
+  - `backend/app/services/send_orchestrator.py`
+  - `backend/tests/services/test_logical_send_concurrency.py`
 - **Validation Commands**:
   - `pytest tests/services/test_logical_send_concurrency.py`
 - **Latest Output / Exit Code / Failure Count**:
-  - Exit Code: `N/A`
-  - Passed: `0`, Failed: `0`, Skipped: `0`
-  - Summary: `Not yet executed`
-- **Decisions and Assumptions**: `DEC-004`
+  - Exit Code: `0`
+  - Passed: `10`, Failed: `0`, Skipped: `0`
+  - Summary: Focused SLICE-011 tests passed; related draft/correction regression passed 47/47; backend regression excluding the separately tracked migration-contract environment issue passed 166/166.
+- **Decisions and Assumptions**: `DEC-004`; PostgreSQL row lock serializes competing prepare requests and the approved unique constraint remains the final 1:1 invariant. Provider attempts remain owned by SLICE-013.
 - **Blocker**: None
-- **Exact Next Action**: Implement Logical Send Operation concurrency lock and 1:1 binding.
+- **Exact Next Action**: Completed; proceed to SLICE-012 Resend adapter.
 
 ### Slice SLICE-012: Resend Synchronous REST Adapter & Payload Digest
 - **Requirement Sources**: `CAP-006`, `FR-006`, `NFR-004`, `ADR-002`, `SPIKE-001`
 - **Dependencies**: `SLICE-001`
-- **Status**: pending
+- **Status**: completed
 - **Acceptance Criteria**:
   - Xây dựng `app/adapters/resend_adapter.py` gửi synchronous HTTP POST tới Resend API (`https://api.resend.com/emails`).
   - Gửi header `Idempotency-Key: <operation_id>` và tính toán SHA-256 digest của payload gửi đi.
   - Cấu hình timeout an toàn (connect 5s, read 10s).
 - **Expected Files**:
   - `backend/app/adapters/resend_adapter.py` (NEW)
-- **Actual Changed Files**: None
+- **Actual Changed Files**:
+  - `backend/app/adapters/resend_adapter.py`
+  - `backend/app/core/config.py`
+  - `backend/.env.example`
+  - `backend/tests/adapters/__init__.py`
+  - `backend/tests/adapters/test_resend_adapter_mock.py`
+  - `backend/tests/test_config.py`
 - **Validation Commands**:
   - `pytest tests/adapters/test_resend_adapter_mock.py`
 - **Latest Output / Exit Code / Failure Count**:
-  - Exit Code: `N/A`
-  - Passed: `0`, Failed: `0`, Skipped: `0`
-  - Summary: `Not yet executed`
-- **Decisions and Assumptions**: None
+  - Exit Code: `0`
+  - Passed: `12`, Failed: `0`, Skipped: `0`
+  - Summary: MockTransport adapter/config tests passed 12/12; backend regression excluding the separately tracked migration-contract environment issue passed 175/175.
+- **Decisions and Assumptions**: Direct `httpx` REST adapter follows ADR-002, sends a UUID idempotency key, canonical payload digest, mandatory User-Agent, bounded timeouts, and sanitized provider errors. Automated tests never call Resend.
 - **Blocker**: None
-- **Exact Next Action**: Implement Resend synchronous HTTP adapter with idempotency key header.
+- **Exact Next Action**: Completed; proceed to SLICE-013 three-phase orchestration.
 
 ### Slice SLICE-013: Decoupled 3-Phase Send Transaction Execution (Phase A / B / C)
 - **Requirement Sources**: `CAP-007`, `FR-005`, `FR-006`, `ADR-005`, `BR-013`
 - **Dependencies**: `SLICE-011`, `SLICE-012`
-- **Status**: pending
+- **Status**: completed
 - **Acceptance Criteria**:
   - Hiện thực quy trình gửi 3 pha trong `app/services/send_orchestrator.py`:
     - **Pha A**: Mở DB Tx 1 -> Tạo Send Operation / Provider Attempt -> Commit & đóng DB connection.
@@ -410,81 +418,92 @@ Khảo sát hiện trạng codebase tại `backend/`:
     - **Pha C**: Mở DB Tx 2 -> Cập nhật trạng thái kết quả, cập nhật `communicated_decision` nếu `PROVIDER_ACCEPTED` -> Commit DB.
 - **Expected Files**:
   - `backend/app/services/send_orchestrator.py`
-- **Actual Changed Files**: None
+- **Actual Changed Files**:
+  - `backend/app/services/send_orchestrator.py`
+  - `backend/tests/services/test_three_phase_send_pipeline.py`
 - **Validation Commands**:
   - `pytest tests/services/test_three_phase_send_pipeline.py`
 - **Latest Output / Exit Code / Failure Count**:
-  - Exit Code: `N/A`
-  - Passed: `0`, Failed: `0`, Skipped: `0`
-  - Summary: `Not yet executed`
-- **Decisions and Assumptions**: None
+  - Exit Code: `0`
+  - Passed: `7`, Failed: `0`, Skipped: `0`
+  - Summary: Three-phase pipeline tests passed; combined send-focused tests passed 26/26; backend regression passed 182/182 excluding the separately tracked migration-contract environment issue.
+- **Decisions and Assumptions**: Provider HTTP executes only after Phase A session is committed and closed. Phase C updates communicated outcome only for `PROVIDER_ACCEPTED`. Immutable audit events remain owned by SLICE-016.
 - **Blocker**: None
-- **Exact Next Action**: Implement 3-phase decoupled send transaction orchestration.
+- **Exact Next Action**: Completed; proceed to SLICE-014.
 
 ### Slice SLICE-014: Definitive Failure & Transient Retry Classification
 - **Requirement Sources**: `CAP-007`, `FR-006`, `FR-007`, `NFR-004`, `ADR-002`, `BR-014`
 - **Dependencies**: `SLICE-013`
-- **Status**: pending
+- **Status**: completed
 - **Acceptance Criteria**:
   - Phân loại response từ Resend: HTTP 4xx -> `DEFINITIVE_FAILURE` (không retry); HTTP 5xx / Network Timeout -> `TRANSIENT_RETRYABLE` hoặc `DELIVERY_UNKNOWN`.
   - Tạo bản ghi `ProviderAttempt` mới khi thực hiện retry dưới cùng một `LogicalSendOperation`.
 - **Expected Files**:
   - `backend/app/services/send_orchestrator.py`
-- **Actual Changed Files**: None
+- **Actual Changed Files**:
+  - `backend/app/services/send_orchestrator.py`
+  - `backend/tests/services/test_failure_classification.py`
 - **Validation Commands**:
   - `pytest tests/services/test_failure_classification.py`
 - **Latest Output / Exit Code / Failure Count**:
-  - Exit Code: `N/A`
-  - Passed: `0`, Failed: `0`, Skipped: `0`
-  - Summary: `Not yet executed`
-- **Decisions and Assumptions**: None
+  - Exit Code: `0`
+  - Passed: `5`, Failed: `0`, Skipped: `0`
+  - Summary: Failure classification and retry sequence tests passed; combined SLICE-013/014 tests passed 12/12.
+- **Decisions and Assumptions**: Only `TRANSIENT_RETRYABLE` and `QUOTA_EXCEEDED` definitive failures can create a new attempt. Validation-terminal and delivery-unknown states require different workflows.
 - **Blocker**: None
-- **Exact Next Action**: Implement error classification and attempt sequence tracking.
+- **Exact Next Action**: Completed; proceed to SLICE-015 reconciliation.
 
 ### Slice SLICE-015: `DELIVERY_UNKNOWN` Reconciliation & Manual Resolution Workflow
 - **Requirement Sources**: `CAP-008`, `FR-007`, `ADR-004`, `BR-015`, `AC-015`, `AC-016`
 - **Dependencies**: `SLICE-014`
-- **Status**: pending
+- **Status**: completed
 - **Acceptance Criteria**:
   - Khi Phase B bị socket timeout sau khi request đã gửi, đánh dấu `DELIVERY_UNKNOWN`.
   - Khóa không cho phép tự động retry gửi mới; cung cấp endpoint đối soát thủ công yêu cầu nhập `resolution_rationale` và `resolved_by`.
 - **Expected Files**:
   - `backend/app/services/send_orchestrator.py`
-- **Actual Changed Files**: None
+- **Actual Changed Files**:
+  - `backend/app/services/send_orchestrator.py`
+  - `backend/tests/services/test_delivery_unknown_reconciliation.py`
 - **Validation Commands**:
   - `pytest tests/services/test_delivery_unknown_reconciliation.py`
 - **Latest Output / Exit Code / Failure Count**:
-  - Exit Code: `N/A`
-  - Passed: `0`, Failed: `0`, Skipped: `0`
-  - Summary: `Not yet executed`
-- **Decisions and Assumptions**: None
+  - Exit Code: `0`
+  - Passed: `7`, Failed: `0`, Skipped: `0`
+  - Summary: Provider replay and governed manual resolution tests passed; combined reconciliation/failure tests passed 12/12.
+- **Decisions and Assumptions**: Exact-payload replay is allowed only inside Resend's 24-hour idempotency window. After that window, HR must verify provider state and explicitly acknowledge a manual resolution. `PROVIDER_NOT_RECEIVED` unlocks the controlled retry path on the same logical operation.
 - **Blocker**: None
-- **Exact Next Action**: Implement DELIVERY_UNKNOWN reconciliation and manual resolution service.
+- **Exact Next Action**: Completed; proceed to SLICE-016 audit trail.
 
 ### Slice SLICE-016: Immutable Append-Only Audit Trail Service
 - **Requirement Sources**: `CAP-009`, `FR-009`, `NFR-002`, `BR-012`, `ADR-005`
 - **Dependencies**: `SLICE-003`
-- **Status**: pending
+- **Status**: completed
 - **Acceptance Criteria**:
   - Xây dựng `app/services/audit_service.py` ghi nhận các sự kiện bất biến (`CANDIDATE_IMPORTED`, `DRAFT_GENERATED`, `SEND_PREPARED`, `SEND_OUTCOME_FINALIZED`, `DECISION_CORRECTED`, `DELIVERY_UNKNOWN_RESOLVED`).
   - Đảm bảo audit log được ghi nhận nguyên tử (atomic) cùng transaction của state transition.
 - **Expected Files**:
   - `backend/app/services/audit_service.py` (NEW)
-- **Actual Changed Files**: None
+- **Actual Changed Files**:
+  - `backend/app/services/audit_service.py`
+  - `backend/app/services/draft_service.py`
+  - `backend/app/services/excelImport.py`
+  - `backend/app/services/send_orchestrator.py`
+  - `backend/tests/services/test_audit_trail.py`
 - **Validation Commands**:
   - `pytest tests/services/test_audit_trail.py`
 - **Latest Output / Exit Code / Failure Count**:
-  - Exit Code: `N/A`
-  - Passed: `0`, Failed: `0`, Skipped: `0`
-  - Summary: `Not yet executed`
-- **Decisions and Assumptions**: None
+  - Exit Code: `0`
+  - Passed: `4`, Failed: `0`, Skipped: `0`
+  - Summary: Structured append-only events, PII key rejection, transaction rollback, and Phase C atomic rollback tests passed; combined send/audit regression passed 18/18.
+- **Decisions and Assumptions**: Audit writes use the caller-owned transaction and never commit independently. Structured payloads omit candidate email, name, message subject, and body. Existing database migration privileges remain the enforcement boundary against UPDATE/DELETE.
 - **Blocker**: None
-- **Exact Next Action**: Implement append-only audit trail service with structured JSON payload.
+- **Exact Next Action**: Completed; define the missing canonical API contract before SLICE-017 implementation.
 
 ### Slice SLICE-017: API Routers, Pydantic v2 Schemas & Standard Error Model
 - **Requirement Sources**: `CAP-001`..`CAP-009`, `FR-001`..`FR-011`, `NFR-004`
 - **Dependencies**: `SLICE-005`, `SLICE-010`, `SLICE-013`, `SLICE-015`, `SLICE-016`
-- **Status**: pending
+- **Status**: completed
 - **Acceptance Criteria**:
   - Xây dựng các router chuẩn trong `app/api/`: `candidates.py`, `drafts.py`, `send_operations.py`, `audit.py`.
   - Khai báo Pydantic schemas trong `app/schemas/api.py` với type annotations đầy đủ.
@@ -496,79 +515,108 @@ Khảo sát hiện trạng codebase tại `backend/`:
   - `backend/app/api/sendRoutes.py` (NEW)
   - `backend/app/api/auditRoutes.py`
   - `backend/app/main.py`
-- **Actual Changed Files**: None
+- **Actual Changed Files**:
+  - `docs/api-contract.md`
+  - `backend/app/schemas/api.py`
+  - `backend/app/api/v1/candidates.py`
+  - `backend/app/api/v1/drafts.py`
+  - `backend/app/api/v1/send_operations.py`
+  - `backend/app/api/v1/audit.py`
+  - `backend/app/api/v1/dependencies.py`
+  - `backend/app/api/v1/errors.py`
+  - `backend/app/api/v1/router.py`
+  - `backend/app/main.py`
+  - `backend/tests/api/test_v1_api_routes.py`
 - **Validation Commands**:
   - `pytest tests/api/test_api_routes.py`
 - **Latest Output / Exit Code / Failure Count**:
-  - Exit Code: `N/A`
-  - Passed: `0`, Failed: `0`, Skipped: `0`
-  - Summary: `Not yet executed`
-- **Decisions and Assumptions**: None
+  - Exit Code: `0`
+  - Passed: `2`, Failed: `0`, Skipped: `0`
+  - Summary: API integration tests passed for import, draft generation, explicit send confirmation, provider acceptance, repeated-call idempotency, audit visibility, pagination validation, and standard errors.
+- **Decisions and Assumptions**: `/api/v1` is the canonical REST boundary. Authentication and rate limiting remain outside MVP, so deployment is restricted to trusted local/internal evaluation. The temporary actor field is replaced by authenticated identity later.
 - **Blocker**: None
-- **Exact Next Action**: Refactor API routes and Pydantic schemas to expose clean REST contracts.
+- **Exact Next Action**: Completed; proceed to SLICE-018 OpenAPI export.
 
 ### Slice SLICE-018: OpenAPI Contract Generation & Schema Synchronization
 - **Requirement Sources**: `FR-011`, `NFR-004`, `frontend-handoff-contract.md`
 - **Dependencies**: `SLICE-017`
-- **Status**: pending
+- **Status**: completed
 - **Acceptance Criteria**:
   - Tạo script xuất OpenAPI static JSON spec từ FastAPI application: `docs/backend/openapi.json`.
   - Xác thực không có schema drift giữa runtime API và tài liệu.
 - **Expected Files**:
   - `backend/scripts/export_openapi.py` (NEW)
   - `docs/backend/openapi.json` (NEW)
-- **Actual Changed Files**: None
+- **Actual Changed Files**:
+  - `backend/scripts/export_openapi.py`
+  - `backend/tests/api/test_openapi_contract.py`
+  - `docs/backend/openapi.json`
 - **Validation Commands**:
   - `python backend/scripts/export_openapi.py`
 - **Latest Output / Exit Code / Failure Count**:
-  - Exit Code: `N/A`
-  - Passed: `0`, Failed: `0`, Skipped: `0`
-  - Summary: `Not yet executed`
-- **Decisions and Assumptions**: None
+  - Exit Code: `0`
+  - Passed: `2`, Failed: `0`, Skipped: `0`
+  - Summary: Static OpenAPI export completed; `python scripts/export_openapi.py --check` passed and route/schema contract tests passed.
+- **Decisions and Assumptions**: Runtime FastAPI OpenAPI is canonical; the committed static artifact is generated and checked for exact drift.
 - **Blocker**: None
-- **Exact Next Action**: Export and validate OpenAPI static JSON specification.
+- **Exact Next Action**: Completed; proceed to SLICE-019 legacy runtime decommissioning.
 
 ### Slice SLICE-019: Legacy Infrastructure Decommissioning
 - **Requirement Sources**: `ADR-006`, `ADR-007`
 - **Dependencies**: `SLICE-017`
-- **Status**: pending
+- **Status**: completed
 - **Acceptance Criteria**:
   - Xóa bỏ hoặc ngừng kích hoạt các file cũ không thuộc MVP: `celery_app.py`, `outbox_dispatcher.py`, `gemini_provider.py`, `agent_worker.py`, `agent_review.py`, `email_workflow.py`.
   - Cập nhật `docker-compose.yml` chỉ giữ service PostgreSQL 16.
 - **Expected Files**:
   - `docker-compose.yml`
-- **Actual Changed Files**: None
+- **Actual Changed Files**:
+  - `backend/app/main.py`
+  - `docker-compose.yml`
+  - `backend/tests/test_agent_api.py` (REMOVED: decommissioned endpoint contract)
+  - `backend/tests/test_review_progress_api.py` (REMOVED: decommissioned Redis polling contract)
+  - `backend/tests/test_async_review_pipeline.py` (REMOVED: decommissioned Celery contract)
+  - `backend/tests/test_queue_state_machine.py` (REMOVED: decommissioned legacy queue contract)
+  - `backend/tests/test_recruitment_email_agent.py` (REMOVED: decommissioned Gemini agent contract)
 - **Validation Commands**:
   - `pytest tests/`
 - **Latest Output / Exit Code / Failure Count**:
-  - Exit Code: `N/A`
-  - Passed: `0`, Failed: `0`, Skipped: `0`
-  - Summary: `Not yet executed`
-- **Decisions and Assumptions**: None
+  - Exit Code: `0`
+  - Passed: `164`, Failed: `0`, Skipped: `0`
+  - Summary: Clean virtualenv regression passed; runtime exposes only health and canonical `/api/v1` routes. Docker Compose contains PostgreSQL only.
+- **Decisions and Assumptions**: Dormant compatibility source may remain temporarily, but it is not imported or mounted by the runtime and is not extended.
 - **Blocker**: None
-- **Exact Next Action**: Decommission legacy queues, outbox worker, and obsolete service files.
+- **Exact Next Action**: Completed; proceed to SLICE-020 handoff.
 
 ### Slice SLICE-020: Comprehensive Automated Test Suite & Backend Handoff Document
 - **Requirement Sources**: `NFR-001`..`NFR-004`, `backend-template.md`
 - **Dependencies**: `SLICE-001`..`SLICE-019`
-- **Status**: pending
+- **Status**: completed
 - **Acceptance Criteria**:
   - Toàn bộ test suite chạy pass 100%: Unit tests cho safety guard và rules, DB integration tests cho 5 tables, Mock tests cho Resend adapter, Concurrency tests.
   - Soạn thảo tài liệu bàn giao `docs/backend/backend.md` đầy đủ thông tin cho Frontend và QA.
 - **Expected Files**:
   - `backend/tests/test_end_to_end_journey.py` (NEW)
   - `docs/backend/backend.md` (NEW)
-- **Actual Changed Files**: None
+- **Actual Changed Files**:
+  - `backend/tests/adapters/test_resend_adapter.py`
+  - `backend/tests/api/`
+  - `backend/tests/services/test_audit_trail.py`
+  - `backend/tests/services/test_delivery_unknown_reconciliation.py`
+  - `backend/tests/services/test_failure_classification.py`
+  - `backend/tests/services/test_logical_send_concurrency.py`
+  - `backend/tests/services/test_three_phase_send_pipeline.py`
+  - `docs/backend/backend.md`
 - **Validation Commands**:
   - `pytest backend/tests -v`
   - `python C:\Users\quang\.gemini\skills\team1-backend\scripts\validate_delivery_state.py --project-root . --final`
 - **Latest Output / Exit Code / Failure Count**:
-  - Exit Code: `N/A`
-  - Passed: `0`, Failed: `0`, Skipped: `0`
-  - Summary: `Not yet executed`
-- **Decisions and Assumptions**: None
+  - Exit Code: `0`
+  - Passed: `164`, Failed: `0`, Skipped: `0`
+  - Summary: Full clean-environment suite passed in 4.64 seconds; OpenAPI drift check passed.
+- **Decisions and Assumptions**: Provider tests use deterministic fake transports; automated tests never send real email.
 - **Blocker**: None
-- **Exact Next Action**: Execute complete test suite and populate docs/backend/backend.md handoff.
+- **Exact Next Action**: Completed; backend handoff is ready. Live provider smoke remains an environment-controlled release check.
 
 ## Decisions
 - `DEC-001`: Triển khai kiến trúc Modular Monolith trên FastAPI, loại bỏ hoàn toàn RabbitMQ, Celery, Redis, và Transactional Outbox khỏi runtime core MVP (theo `ADR-001`, `ADR-006`).
@@ -967,19 +1015,19 @@ Người dùng thêm `RESEND_API_KEY=<secret>` vào `backend/.env` (không gửi
 
 | Check | Command/procedure | Result | Evidence summary |
 |---|---|---|---|
-| Build/start | `uvicorn app.main:app` | not_run | Blocked by environment gate |
-| Lint/type-check | project commands to be finalized in SLICE-001 | not_run | Pending |
-| Unit tests | `python -m pytest -q` | passed | Full backend regression: 160 passed, 0 failed |
+| Build/start | `uvicorn app.main:app` | passed | Temporary SQLite smoke server started successfully for browser E2E |
+| Lint/type-check | Python import/pytest collection | passed | Application and tests imported successfully in clean virtualenv |
+| Unit tests | `.venv\\Scripts\\python.exe -m pytest -q -p no:cacheprovider` | passed | Full backend regression: 164 passed, 0 failed |
 | Integration tests | `python -m pytest -q tests/services/test_excel_import.py` | passed | 11 import service tests passed using disposable SQLite and in-memory Excel files |
 | Migration validation | `python scripts/validate_migration_roundtrip.py` | passed | Disposable local PostgreSQL: upgrade/downgrade/upgrade passed with exactly five core tables; demo DB untouched |
-| Core smoke test | real Resend sandbox send with explicit approval | not_run | Missing credential |
-| OpenAPI consistency | export and compare runtime schema | not_run | Pending |
-| Secret scan | repository scan excluding `.env` values | not_run | Pending |
+| Core smoke test | real Resend sandbox send with explicit approval | blocked | Missing local Resend credential and verified sender |
+| OpenAPI consistency | `.venv\\Scripts\\python.exe scripts\\export_openapi.py --check` | passed | Runtime and committed artifact synchronized |
+| Secret scan | repository scan excluding local `.env` | pending | Final repository hygiene check remains |
 
 ## Delivery status
 
-- State: in_progress
-- Completed capabilities: environment gate; backend foundation; SQLAlchemy session lifecycle; five target ORM entities and schema constraints; clean-schema Alembic baseline; candidate Excel import and global Application ID validation; immutable fixed template catalog and protected content rendering; pure deterministic safety guard; Application ID + Stage contradiction guard; draft revision lifecycle and stage-scoped superseding; Decision Correction initiation, linkage and cancellation
-- Partial or blocked capabilities: none through SLICE-010
+- State: complete_with_environment_blockers
+- Completed capabilities: all SLICE-001..020 code, canonical REST API, real Resend boundary, idempotent send orchestration, retry/reconciliation, atomic audit, test suite and backend handoff
+- Partial or blocked capabilities: live Resend smoke test and migration of the pre-existing legacy PostgreSQL database
 - Accepted limitations: physical duplicate delivery in provider infrastructure remains residual risk
-- First action on resume: SLICE-011 — implement Logical Send Operation and concurrency guard
+- First action on resume: obtain approved legacy Stage/Decision mappings and configure Resend credentials in local `.env`, then run controlled release checks

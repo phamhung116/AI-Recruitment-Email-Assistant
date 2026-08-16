@@ -8,8 +8,9 @@ export const httpClient = axios.create({
 httpClient.interceptors.response.use(
     (response) => response,
     (error) => {
+        const apiMessage = error.response?.data?.message;
         const detail = error.response?.data?.detail;
-        const message = getErrorMessage(detail);
+        const message = typeof apiMessage === "string" ? apiMessage : getErrorMessage(detail);
 
         return Promise.reject(new Error(message));
     },
