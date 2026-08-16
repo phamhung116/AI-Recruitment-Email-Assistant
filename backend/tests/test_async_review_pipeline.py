@@ -216,6 +216,7 @@ class AsyncReviewPipelineTest(unittest.TestCase):
         db = self.SessionLocal()
         try:
             candidate = Candidate(
+                application_id="TEST-ASYNC-001",
                 full_name="Async Demo",
                 email="async-demo@example.com",
                 position="Backend Engineer",

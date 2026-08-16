@@ -2,6 +2,7 @@ import os
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
+from uuid import uuid4
 
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -403,6 +404,7 @@ class QueueStateMachineTest(unittest.TestCase):
         required_placeholders: list[str],
     ) -> tuple[Candidate, EmailTemplate]:
         candidate = Candidate(
+            application_id=f"TEST-{uuid4()}",
             full_name="Nguyen Demo",
             email="demo@example.com",
             position="Backend Engineer",

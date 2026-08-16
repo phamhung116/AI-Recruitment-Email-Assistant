@@ -61,6 +61,7 @@ class AgentReviewApiTest(unittest.TestCase):
         db = self.SessionLocal()
         try:
             candidate = Candidate(
+                application_id="TEST-API-001",
                 full_name="API Demo",
                 email="api-demo@example.com",
                 position="Backend Engineer",
@@ -114,6 +115,7 @@ class AgentReviewApiTest(unittest.TestCase):
         db = self.SessionLocal()
         try:
             candidate = Candidate(
+                application_id="TEST-API-002",
                 full_name="Tran Bao Chau",
                 email="chau@example.com",
                 position="Backend Developer",
@@ -154,6 +156,7 @@ class AgentReviewApiTest(unittest.TestCase):
         db = self.SessionLocal()
         try:
             candidate = Candidate(
+                application_id="TEST-API-003",
                 full_name="Tran Bao Chau",
                 email="chau@example.com",
                 position="Backend Developer",
@@ -200,6 +203,7 @@ class AgentReviewApiTest(unittest.TestCase):
         db = self.SessionLocal()
         try:
             candidate = Candidate(
+                application_id="TEST-API-004",
                 full_name="Tran Bao Chau",
                 email="chau@example.com",
                 position="Backend Developer",
@@ -248,6 +252,7 @@ class AgentReviewApiTest(unittest.TestCase):
         db = self.SessionLocal()
         try:
             candidate = Candidate(
+                application_id="TEST-API-005",
                 full_name="Nguyen Minh An",
                 email="an@example.com",
                 position="Backend Developer",
