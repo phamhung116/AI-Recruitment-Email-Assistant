@@ -63,6 +63,7 @@ class ReviewProgressApiTest(unittest.TestCase):
         db = self.SessionLocal()
         try:
             candidate = Candidate(
+                application_id="TEST-POLLING-001",
                 full_name="Polling Demo",
                 email="polling@example.com",
                 position="Backend Engineer",

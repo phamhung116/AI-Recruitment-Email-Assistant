@@ -7,6 +7,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/ai_recruitment_email_assistant"
     backend_cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    backend_host: str = "0.0.0.0"
+    backend_port: int = Field(default=8000, ge=1, le=65535)
+    environment: str = "development"
+    log_level: str = "INFO"
+    resend_api_key: SecretStr | None = None
+    email_sender_address: str = "onboarding@resend.dev"
+    email_sender_name: str = "Recruitment Team"
+
+    # Transitional compatibility for legacy review modules. These settings are
+    # not part of the target MVP runtime and are removed with SLICE-019.
     gemini_api_key: SecretStr | None = None
     gemini_model: str = "gemini-2.5-flash"
     gemini_agent_enabled: bool = False
@@ -31,6 +41,14 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.backend_cors_origins.split(",") if origin.strip()]
 
     @property
+    def resend_api_key_value(self) -> str | None:
+        if self.resend_api_key is None:
+            return None
+
+        value = self.resend_api_key.get_secret_value().strip()
+        return value or None
+
+    @property
     def gemini_api_key_value(self) -> str | None:
         if self.gemini_api_key is None:
             return None
@@ -44,7 +62,6 @@ class Settings(BaseSettings):
 
     @property
     def gemini_effective_agent_steps(self) -> int:
-        """Level 3 needs two observations and one final decision."""
         return max(3, self.gemini_agent_max_steps)
 
 
